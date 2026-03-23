@@ -1,0 +1,10 @@
+{
+  "name": "supabase-db-analyzer",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "advanced_analyze_and_suggest.js",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.0.0",
+    "openai": "^4.0.0"
+  }
+}
