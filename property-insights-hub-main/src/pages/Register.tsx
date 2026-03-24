@@ -54,7 +54,7 @@ try {
 
   if (data.session) {
     toast.success("Conta criada com sucesso!");
-    navigate("/confirm-email");
+    navigate("/dashboard");
   } else {
     toast.success("Verifique seu email para confirmar a conta.");
   }

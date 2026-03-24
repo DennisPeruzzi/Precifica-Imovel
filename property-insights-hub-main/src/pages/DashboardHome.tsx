@@ -44,12 +44,12 @@ const DashboardHome = () => {
       // Buscar nome do perfil
       const { data: profile } = await supabase
         .from("profiles")
-        .select("name")
+        .select("nome")
         .eq("id", userId)
         .single();
 
       if (profile) {
-        setName(profile.name ?? "");
+        setName(profile.nome ?? "");
       }
 
       // Buscar avaliações recentes
