@@ -118,7 +118,7 @@ const DashboardHome = () => {
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground">Dashboard</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Bem-vindo de volta, {""}{profile?.name || "Usuário"}
+              Bem-vindo de volta, {""}{profile?.nome || "Usuário"}
             </p>
           </div>
           <Link to="/dashboard/nova-avaliacao">
