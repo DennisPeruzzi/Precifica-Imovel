@@ -430,112 +430,103 @@ const copyToClipboardFallback = (text: string) => {
   return ok;
 };
 
-const handleCopyResumo = async (e?: React.MouseEvent<HTMLButtonElement>) => {
-  e?.preventDefault();
-  e?.stopPropagation();
+const cidadeSelecionada = cidades.find((c) => c.id === cidade);
 
+const buildRentalSummaryText = () => {
+  if (!rentalResult?.ok) return null;
+
+  const linhaImovelPremium = [
+    tipo ? tipo.charAt(0).toUpperCase() + tipo.slice(1) : null,
+    metragem ? `${metragem}m²` : null,
+    quartos ? `${quartos} quartos` : null,
+    banheiros ? `${banheiros} banheiros` : null,
+    vagas ? `${vagas} vagas` : null,
+    edícula === "sim" ? "Edícula" : null,
+    mobiliado === "sim" ? "Mobiliado" : null,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+
+  const localLabel = [bairro, cidadeSelecionada?.name].filter(Boolean).join(", ");
+
+  const scopeLabel =
+    rentalResult.scope === "seed"
+      ? "Pesquisa de mercado"
+      : rentalResult.scope === "bairro"
+      ? "Pesquisa local"
+      : rentalResult.scope === "cidade"
+      ? "Pesquisa regional"
+      : "Referência de mercado";
+
+  const baseDadosLabel =
+    rentalResult.confidence === "alta"
+      ? "Referência muito confiável"
+      : rentalResult.confidence === "media"
+      ? "Referência confiável"
+      : "Referência inicial";
+
+  const ownerFriendlyMessage = (
+    rentalResult.scope === "seed"
+      ? "Valor sugerido com base em dados de mercado da região."
+      : rentalResult.scope === "bairro"
+      ? "Valor sugerido com base em imóveis comparáveis da região."
+      : rentalResult.scope === "cidade"
+      ? "Valor sugerido com base em referências de mercado da cidade."
+      : rentalResult.message || "Valor sugerido com base em dados de mercado."
+  )
+    .replace(/\r?\n/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const texto = [
+    `📌 *Resumo da Avaliação (Locação)*`,
+    linhaImovelPremium,
+    `💰 *Aluguel sugerido:* ${formatBRL(rentalResult.rent_estimada)}`,
+    `↕️ Faixa estimada: ${formatBRL(rentalResult.rent_min)} – ${formatBRL(rentalResult.rent_max)}`,
+    localLabel ? `📍 ${localLabel}` : null,
+    `📊 Base da estimativa: ${scopeLabel}`,
+    `Nível de confiança: ${baseDadosLabel}`,
+    `Imóveis comparados: ${rentalResult.comps_utilizadas ?? 0}`,
+    ownerFriendlyMessage ? `ℹ️ ${ownerFriendlyMessage}` : null,
+    `Calculado por Precifica Imóvel`,
+  ]
+    .filter((x) => typeof x === "string" && x.trim().length > 0)
+    .join("\n");
+
+  return texto;
+};
+
+const handleCopyResumo = async () => {
   try {
     if (!rentalResult?.ok) {
-      toast.error("Gere a avaliação antes de copiar o resumo.");
+      toast.error("Faça uma avaliação antes de copiar o resumo.");
       return;
     }
 
-    const scopeLabel =
-      rentalResult.scope === "bairro"
-        ? "Bairro"
-        : rentalResult.scope === "seed"
-        ? "Base de Mercado"
-        : "Cidade";
-
-    const baseDadosLabel =
-      rentalResult.confidence === "alta"
-        ? "Dados amplos"
-        : rentalResult.confidence === "media"
-        ? "Dados consistentes"
-        : "Dados iniciais";
-
-    // ✅ seus states são string → normaliza para exibição
- const tipoLabel = tipo || "Imóvel";
-
-const metragemNum = Number(metragem);
-const metragemLabel = Number.isFinite(metragemNum) && metragemNum > 0 ? `${metragemNum}m²` : "-";
-
-const quartosNum = Number(quartos);
-const quartosLabel = Number.isFinite(quartosNum) && quartosNum > 0 ? `${quartosNum} quartos` : "- quartos";
-
-const banheirosNum = Number(banheiros);
-const banheirosLabel = Number.isFinite(banheirosNum) && banheirosNum > 0 ? `${banheirosNum} banheiro${banheirosNum === 1 ? "" : "s"}` : "- banheiros";
-
-const vagasNum = Number(vagas);
-const vagasLabel = Number.isFinite(vagasNum) ? `${vagasNum} vaga${vagasNum === 1 ? "" : "s"}` : "- vagas";
-
-const edículaLabel = edícula === "sim" ? "Edícula" : "- edícula";
-
-const mobiliadoLabel =
-  dealType === "locacao" ? (mobiliado === "sim" ? "Mobiliado" : "Não mobiliado") : null;
-
-const linhaImovelPremium = [
-  tipoLabel,
-  metragemLabel,
-  quartosLabel,
-  banheirosLabel,
-  vagasLabel,
-  edículaLabel,
-  mobiliadoLabel,
-].filter(Boolean).join(" • ");
-
-const localLabel = [bairro, cidadeNome].filter(Boolean).join(", ");
-
-const padraoLine = padrao ? `🏷️ Padrão do imóvel: ${padrao}` : null;
-
-const texto = [
-  `📌 *Resumo da Avaliação (Locação)*`,
-  ``,
-  linhaImovelPremium,
-  `💰 *Aluguel sugerido:* ${formatBRL(rentalResult.rent_estimada)}`,
-  `↕️ Faixa estimada: ${formatBRL(rentalResult.rent_min)} – ${formatBRL(rentalResult.rent_max)}`,
-  ``,
-  localLabel ? `📍 ${localLabel}` : null,
-  ``,
-  `📊 Fonte: ${scopeLabel}`,
-  `Base de dados: ${baseDadosLabel}`,
-  `Comparáveis analisados: ${rentalResult.comps_utilizadas ?? 0}`,
-  ``,
-  padraoLine,
-  rentalResult.message
-    ? `ℹ️ ${rentalResult.message}`
-    : `ℹ️ Estimativa baseada em modelo estatístico com dados de mercado.`,
-  ``,
-  `Calculado por Precifica Imóvel`,
-].filter((x) => typeof x === "string" && x.trim().length > 0).join("\n");
-
-    // 👉 http/ip (inseguro) = cai direto no fallback mantendo user gesture
-    const canUseModernClipboard =
-      typeof navigator !== "undefined" &&
-      !!navigator.clipboard &&
-      typeof window !== "undefined" &&
-      window.isSecureContext;
-
-    if (!canUseModernClipboard) {
-      const ok = copyToClipboardFallback(texto);
-      if (ok) {
-        toast.success("Resumo copiado com sucesso!", {
-          description: "Copiado via modo compatível (HTTP).",
-        });
-        return;
-      }
-      toast.error("Não foi possível copiar no HTTP. Tente localhost ou HTTPS.");
+    const texto = buildRentalSummaryText();
+    if (!texto) {
+      toast.error("Não foi possível montar o resumo.");
       return;
     }
 
-    await navigator.clipboard.writeText(texto);
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(texto);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = texto;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+    }
 
-    toast.success("Resumo copiado com sucesso!", {
-      description: "Você pode colar no WhatsApp ou enviar ao proprietário.",
-    });
+    toast.success("Resumo copiado!");
   } catch (err) {
-    console.error("Falha no Copiar Resumo:", err);
-    toast.error("Não foi possível copiar o resumo. Veja o console.");
+    console.error(err);
+    toast.error("Não foi possível copiar o resumo.");
   }
 };
 
@@ -579,12 +570,20 @@ const texto = [
       : new Date().toLocaleDateString("pt-BR");
 
     const scopeLabel =
-      rentalResult.scope === "bairro" ? "Bairro" :
-      rentalResult.scope === "seed" ? "Base de Mercado" : "Cidade";
+    rentalResult.scope === "seed"
+    ? "Pesquisa de mercado local"
+    : rentalResult.scope === "bairro"
+    ? "Imóveis comparáveis da região"
+    : rentalResult.scope === "cidade"
+    ? "Referências da cidade"
+    : "Referência de mercado";
 
     const baseDadosLabel =
-      rentalResult.confidence === "alta" ? "Dados amplos" :
-      rentalResult.confidence === "media" ? "Dados consistentes" : "Dados iniciais";
+    rentalResult.confidence === "alta"
+    ? "Referência muito confiável"
+    : rentalResult.confidence === "media"
+    ? "Referência confiável"
+    : "Referência inicial";
 
     // 3️⃣ dados do PDF
 
@@ -638,7 +637,7 @@ if (template === "premium") {
       fonte: scopeLabel,
       baseDados: baseDadosLabel,
       comps: rentalResult.comps_utilizadas ?? 0,
-      obs: rentalResult.message ?? null,
+      obs: ownerFriendlyMessage,
     };
 
     // 4️⃣ gerar PDF como Blob
@@ -666,18 +665,24 @@ if (template === "premium") {
     if (uploadError) throw uploadError;
 
     // 8️⃣ salvar registro na tabela reports
-    const { error: dbError } = await supabase
-      .from("reports")
-      .insert({
-        user_id: user.id,
-        evaluation_id: rentalResult.evaluation_id,
-        storage_path: storagePath,
-        deal_type: "locacao",
-        template
-      });
+    const { data: insertedReport, error: dbError } = await supabase
+    .from("reports")
+    .insert({
+    user_id: user.id,
+    evaluation_id: rentalResult.evaluation_id,
+    storage_path: storagePath,
+    deal_type: "locacao",
+    template
+  })
+  .select();
 
-    if (dbError) throw dbError;
+  console.log("report inserido:", insertedReport);
 
+if (dbError) {
+  console.error("erro ao inserir report:", dbError);
+  throw dbError;
+}
+    
     // 9️⃣ download imediato
     const url = URL.createObjectURL(blob);
 
@@ -700,50 +705,80 @@ if (template === "premium") {
 };
 
 const handleWhatsapp = async () => {
+  try {
+    if (!rentalResult?.ok) {
+      toast.error("Faça uma avaliação antes de compartilhar.");
+      return;
+    }
 
-  if (!rentalResult?.evaluation_id) {
-    toast.error("Gere o laudo antes de compartilhar.");
-    return;
+    const texto = buildRentalSummaryText();
+    if (!texto) {
+      toast.error("Não foi possível montar a mensagem.");
+      return;
+    }
+
+    let finalMessage = texto;
+
+    console.log("evaluation_id:", rentalResult?.evaluation_id);
+
+    if (rentalResult?.evaluation_id) {
+      const { data: report, error: reportError } = await supabase
+        .from("reports")
+        .select("storage_path")
+        .eq("evaluation_id", rentalResult.evaluation_id)
+        .eq("deal_type", "locacao")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      console.log("report encontrado:", report);
+      if (reportError) console.error("erro buscando report:", reportError);
+
+      if (report?.storage_path) {
+        const { data } = supabase.storage
+          .from("reports")
+          .getPublicUrl(report.storage_path);
+
+        console.log("publicUrl:", data?.publicUrl);
+
+        if (data?.publicUrl) {
+          finalMessage = `${texto}\n\n📄 Laudo em PDF:\n${data.publicUrl}`;
+        }
+      }
+    }
+
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(finalMessage)}`;
+    window.open(waUrl, "_blank");
+  } catch (err) {
+    console.error(err);
+    toast.error("Não foi possível abrir o WhatsApp.");
   }
-
-  const { data: report } = await supabase
-      .from("reports")
-      .select("storage_path")
-      .eq("evaluation_id", rentalResult.evaluation_id)
-      .eq("deal_type", "locacao")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-  
-  if (!report) {
-    toast.error("Laudo não encontrado.");
-    return;
-  }
-  const { data: urlData } = supabase.storage
-  .from("reports")
-  .getPublicUrl(report.storage_path);
-
-  if (!urlData?.publicUrl) {
-    toast.error("Erro ao gerar link do laudo.");
-    return;
-  }
-
-  if (!rentalResult?.evaluation_id) {
-  toast.error("Avaliação ainda não registrada.");
-  return;
-}
-
-  const mensagem = `Olá! Aqui é ${profile?.apelido || profile?.nome}, corretor imobiliário.
-
-Segue o laudo completo:
-${urlData.publicUrl}
-
-Caso queira posso explicar os dados da avaliação.`;
-
-  const url = `https://wa.me/?text=${encodeURIComponent(mensagem)}`;
-
-  window.open(url, "_blank");
 };
+
+const scopeLabel =
+  rentalResult?.scope === "seed"
+    ? "Pesquisa de mercado"
+    : rentalResult?.scope === "bairro"
+    ? "Pesquisa local"
+    : rentalResult?.scope === "cidade"
+    ? "Pesquisa regional"
+    : "Referência de mercado";
+
+const confidenceLabel =
+  rentalResult?.confidence === "alta"
+    ? "Referência muito confiável"
+    : rentalResult?.confidence === "media"
+    ? "Referência confiável"
+    : "Referência inicial";
+
+const ownerFriendlyMessage =
+  rentalResult?.scope === "seed"
+    ? "Valor sugerido com base em dados de mercado da região."
+    : rentalResult?.scope === "bairro"
+    ? "Valor sugerido com base em imóveis comparáveis da região."
+    : rentalResult?.scope === "cidade"
+    ? "Valor sugerido com base em referências de mercado da cidade."
+    : rentalResult?.message || "Valor sugerido com base em dados de mercado.";
 
   return (
     <DashboardLayout>
@@ -1079,54 +1114,47 @@ Caso queira posso explicar os dados da avaliação.`;
                     <div className="text-center py-4">
                       <p className="text-sm text-muted-foreground mb-1">Aluguel sugerido (mês)</p>
                       <p className="text-4xl font-display font-bold text-accent">
-                        {formatBRL(rentalResult.rent_estimada)}
-                      </p>
+                       {formatBRL(rentalResult.rent_estimada)}
+                       </p>
                       <p className="text-sm text-muted-foreground mt-2">
-                        Faixa: {formatBRL(rentalResult.rent_min)} – {formatBRL(rentalResult.rent_max)}
+                      Faixa: {formatBRL(rentalResult.rent_min)} – {formatBRL(rentalResult.rent_max)}
                       </p>
-                   
-                   {rentalResult?.message && (
-                        <p className="text-sm text-muted-foreground mt-2">
-                        {rentalResult.message}
+
+                      <p className="text-sm text-muted-foreground mt-2">
+                      {ownerFriendlyMessage}
                       </p>
-              )}
-                    </div>
+                      </div>
 
                     <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-border">
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground">Escopo</p>
-                        <p className="text-sm font-semibold text-card-foreground">
-                         {rentalResult.scope === "bairro"
-                          ? "Bairro"
-                          : rentalResult.scope === "seed"
-                          ? "Base de Mercado"
-                           : "Cidade"}
-                        </p>
-                      </div>
+                     <div className="text-center">
+                     <p className="text-xs text-muted-foreground">Base da estimativa</p>
+                     <p className="text-sm font-semibold text-card-foreground">
+                      {scopeLabel}
+                    </p>
                     </div>
 
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground">Comps usadas</p>
-                        <p className="text-sm font-semibold text-card-foreground">{rentalResult.comps_utilizadas}</p>
-                      </div>
-                      <div className="text-center">
-                        <p className="text-xs text-muted-foreground">Base de Dados</p>
-                        <p
-                          className={`text-sm font-semibold ${
-                            rentalResult.confidence === "alta"
-                              ? "text-success"
-                              : rentalResult.confidence === "media"
-                              ? "text-foreground"
-                              : "text-muted-foreground"
-                          }`}
-                        >
-                          {rentalResult.confidence === "alta"
-                               ? "Dados amplos"
-                                : rentalResult.confidence === "media"
-                                ? "Dados consistentes"
-                                : "Dados iniciais"}
-                        </p>
-                      </div>
+                    <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Imóveis comparados</p>
+                     <p className="text-sm font-semibold text-card-foreground">
+                      {rentalResult.comps_utilizadas ?? 0}
+                    </p>
+                    </div>
+
+                    <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Nível de confiança</p>
+                    <p
+                   className={`text-sm font-semibold ${
+                   rentalResult.confidence === "alta"
+                   ? "text-success"
+                  : rentalResult.confidence === "media"
+                  ? "text-foreground"
+                  : "text-muted-foreground"
+                  }`}
+                    >
+                   {confidenceLabel}
+               </p>
+      </div>
+  </div>
 
                   <div className="mt-6 flex gap-3">
                      <Button type="button" className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleGerarPdf}>
