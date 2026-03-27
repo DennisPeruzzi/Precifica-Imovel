@@ -197,15 +197,17 @@ if (dealType === "locacao") {
 
   // ===== learned =====
   const { data: learnedRows } = await supabase.rpc("learned_rent_m2", {
-    p_cidade: cidadeSelecionada?.name,
-    p_bairro: bairro,
-    p_tipo: tipo,
-    p_padrao: padrao,
-    p_area: area,
-    p_quartos: q,
-    p_mobiliado: mobiliado === "sim",
-  });
-
+  p_cidade: cidadeNome,
+  p_bairro: bairro,
+  p_tipo: tipo,
+  p_padrao: padrao,
+  p_area: Number(metragem),
+  p_quartos: quartos ? Number(quartos) : null,
+  p_banheiros: banheiros ? Number(banheiros) : null,
+  p_vagas: vagas ? Number(vagas) : null,
+  p_mobiliado: dealType === "locacao" ? mobiliado === "sim" : false,
+  p_possui_edicula: edícula === "sim",
+});
   const learned = Array.isArray(learnedRows) ? learnedRows[0] : null;
 
   // ===== seed =====
@@ -309,14 +311,17 @@ if (dealType === "locacao") {
 
   // ===== FALLBACK =====
   const { data } = await supabase.rpc("calculate_rental_price", {
-    p_cidade: cidadeSelecionada?.name,
-    p_bairro: bairro,
-    p_tipo: tipo,
-    p_padrao: padrao,
-    p_area: area,
-    p_quartos: q,
-    p_mobiliado: mobiliado === "sim",
-  });
+  p_cidade: cidadeNome,
+  p_bairro: bairro,
+  p_tipo: tipo,
+  p_padrao: padrao,
+  p_area: Number(metragem),
+  p_quartos: quartos ? Number(quartos) : null,
+  p_banheiros: banheiros ? Number(banheiros) : null,
+  p_vagas: vagas ? Number(vagas) : null,
+  p_mobiliado: dealType === "locacao" ? mobiliado === "sim" : false,
+  p_possui_edicula: edícula === "sim",
+});
 
   const fallback = Array.isArray(data) ? data[0] : data;
 
