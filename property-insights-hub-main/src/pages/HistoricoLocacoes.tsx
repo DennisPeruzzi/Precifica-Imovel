@@ -220,9 +220,9 @@ const { error } = await supabase
 .from("rental_valuations")
 .update({
 status:"locado",
-preco_anunciado: anunciado,
+valor_anunciado: anunciado,
 rent_real: locado,
-dias_para_: dias,
+dias_para_locar: dias,
 percentual_desconto: desconto,
 locado_em:new Date().toISOString()
 })

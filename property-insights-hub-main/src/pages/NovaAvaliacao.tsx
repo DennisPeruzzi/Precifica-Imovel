@@ -590,30 +590,58 @@ const handleCopyResumo = async () => {
 let marketData = null;
 
 if (template === "premium") {
-
-  const { data } = await supabase
+  const { data, error: marketError } = await supabase
     .from("v_market_liquidez")
     .select("*")
     .eq("cidade", cidadeNome)
     .eq("bairro", bairro)
+    .eq("tipo", tipo)
     .limit(1)
     .maybeSingle();
 
-  if (data) {
-    marketData = {
-      preco_m2: data?.preco_m2_medio
-    ? `R$ ${Number(data.preco_m2_medio).toFixed(2)}`
-    : "—",
+  console.log("market query:", {
+    cidadeNome,
+    bairro,
+    tipo,
+    data,
+    marketError,
+  });
 
-  tempo_medio: data?.tempo_medio_locacao
-    ? `${data.tempo_medio_locacao} dias`
-    : "—",
-
-  desconto_medio: data?.desconto_medio
-    ? `${(Number(data.desconto_medio) * 100).toFixed(1)}%`
-    : "—"
-    };
+  if (marketError) {
+    console.error("Erro ao buscar v_market_liquidez:", marketError);
   }
+
+  marketData = {
+    preco_m2:
+      data?.preco_m2_medio !== null && data?.preco_m2_medio !== undefined
+        ? `${Number(data.preco_m2_medio).toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+        })}/m²`
+        : "—",
+
+    liquidez:
+      data?.liquidez !== null && data?.liquidez !== undefined
+        ? String(data.liquidez)
+        : "—",
+
+    tempo_medio:
+  data?.dias_medio_locacao !== null && data?.dias_medio_locacao !== undefined
+        ? `${Number(data.dias_medio_locacao).toLocaleString("pt-BR", {
+        maximumFractionDigits: 0,
+        })} dias`
+        : "—",
+
+    desconto_medio:
+  data?.desconto_medio !== null && data?.desconto_medio !== undefined
+    ? `${(Number(data.desconto_medio) * 100).toLocaleString("pt-BR", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })}%`
+    : "—",
+  };
 }
     const d = {
       market: marketData,

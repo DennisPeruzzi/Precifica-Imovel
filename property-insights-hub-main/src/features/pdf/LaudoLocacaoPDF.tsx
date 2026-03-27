@@ -26,10 +26,10 @@ export type LaudoData = {
   obs?: string | null;
 
   market?: {
-  preco_m2?: string
-  liquidez?: string
-  tempo_medio?: string
-  desconto_medio?: string
+  preco_m2?: string | null;
+  liquidez?: string | null;
+  tempo_medio?: string | null;
+  desconto_medio?: string | null;
 }
 };
 
@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
   gridRow: { flexDirection: "row", gap: 10, marginTop: 10 },
   col: { flexGrow: 1 },
   h: { fontWeight: 700, marginBottom: 6 },
-  footer: {position: "absolute", bottom: 20, left: 30, right: 30, fontSize: 9, color: "#262e3a", boardertop: "1 solid #7d89a0", paddingTop: 6, textAlign: "center" },
+  footer: {position: "absolute", bottom: 20, left: 30, right: 30, fontSize: 9, color: "#262e3a", boardertopWidth: 1, boardertopColor: "#7d89a0", paddingTop: 6, textAlign: "center" },
   footerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between"},
   logo: { width: 30, height: 30, marginBottom: 10},
   footerText: { flex: 1, textAlign: "center", fontSize: 9, color: "#888" },
@@ -196,10 +196,8 @@ const CoverPagePremium = ({ d }: { d: LaudoData }) => {
              Imóvel
           </Text>
             <Text style={styles.coverValue}>
-            {d.tipo}, <br />
-            {d.bairro}, <br />
-            {d.cidade}
-          </Text>
+            { `${d.tipo}\n ${d.bairro},\n ${d.cidade}` }
+            </Text>
         </View>
 
         <View style={[
@@ -385,70 +383,71 @@ const PremiumLayout = ({ d }: { d: LaudoData }) => (
   </Page>
 );
 
-const MarketAnalysisPage = ({ d }: { d: LaudoData }) => (
-  <Page size="A4" style={styles.page}>
+const MarketAnalysisPage = ({ d }: { d: LaudoData }) => {
+  const market = {
+    preco_m2: d.market?.preco_m2 ?? "—",
+    liquidez: d.market?.liquidez ?? "—",
+    tempo_medio: d.market?.tempo_medio ?? "—",
+    desconto_medio: d.market?.desconto_medio ?? "—",
+  };
 
-    <View style={{ marginBottom: 20 }}>
-      <Text style={{ fontSize: 18, fontWeight: 800 }}>
-        Análise de Mercado
-      </Text>
-      <Text style={styles.muted}>
-        Indicadores baseados em imóveis locados na região
-      </Text>
-    </View>
-
-    <View style={styles.card}>
-      <Text style={styles.h}>Preço médio por m²</Text>
-      <Text style={{ fontSize: 18, fontWeight: 800 }}>
-        {d.market?.preco_m2 ?? "—"}
-      </Text>
-    </View>
-
-    <View style={styles.gridRow}>
-
-      <View style={styles.card}>
-        <Text style={styles.h}>Liquidez do bairro</Text>
-        <Text>{d.market?.liquidez ?? "—"}</Text>
+  return (
+    <Page size="A4" style={styles.page}>
+      <View style={{ marginBottom: 20 }}>
+        <Text style={{ fontSize: 18, fontWeight: 800 }}>
+          Análise de Mercado
+        </Text>
+        <Text style={styles.muted}>
+          Indicadores baseados em imóveis locados na região
+        </Text>
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.h}>Tempo médio para locação</Text>
-        <Text>{d.market?.tempo_medio ?? "—"}</Text>
+        <Text style={styles.h}>Preço médio por m²</Text>
+        <Text style={{ fontSize: 18, fontWeight: 800 }}>
+          {market.preco_m2}
+        </Text>
       </View>
 
-    </View>
+      <View style={styles.gridRow}>
+        <View style={[styles.card, styles.col]}>
+          <Text style={styles.h}>Liquidez do bairro</Text>
+          <Text>{market.liquidez}</Text>
+        </View>
 
-    <View style={styles.card}>
-      <Text style={styles.h}>Desconto médio de negociação</Text>
-      <Text>{d.market?.desconto_medio ?? "—"}</Text>
-    </View>
+        <View style={[styles.card, styles.col]}>
+          <Text style={styles.h}>Tempo médio para locação</Text>
+          <Text>{market.tempo_medio}</Text>
+        </View>
+      </View>
 
-        <View style={styles.footer} fixed>
+      <View style={styles.card}>
+        <Text style={styles.h}>Desconto médio de negociação</Text>
+        <Text>{market.desconto_medio}</Text>
+      </View>
 
-          <View style={styles.footerRow}>
+      <View style={styles.footer} fixed>
+        <View style={styles.footerRow}>
+          <Image src="/logo-sem-nome.png" style={styles.logo} />
 
-            <Image src="/logo-sem-nome.png" style={styles.logo} />
+          <View style={styles.footerText}>
+            <Text>
+              Documento gerado por inteligência de mercado • Precifica Imóvel
+            </Text>
 
-            <View style={styles.footerText}>
-              <Text>
-                Documento gerado por inteligência de mercado • Precifica Imóvel
-              </Text>
+            <Text>www.precificaimovel.com.br</Text>
 
-              <Text>
-              www.precificaimovel.com.br
-              </Text>
-
-              <Text
+            <Text
               render={({ pageNumber, totalPages }) =>
                 `Página ${pageNumber} de ${totalPages}`
-                }
-                />
-            </View>
+              }
+            />
           </View>
-       </View>
-
-  </Page>
-);
+        </View>
+      </View>
+    </Page>
+  );
+};
 
 export const LaudoLocacaoPDF = ({ d }: { d: LaudoData }) => (
   <Document>
@@ -462,7 +461,7 @@ export const LaudoLocacaoPDF = ({ d }: { d: LaudoData }) => (
       ? <BasicLayout d={d} />
       : <PremiumLayout d={d} />}
 
-    {d.template === "premium" && d.market && (
+    {d.template === "premium" && (
       <MarketAnalysisPage d={d} />
     )}
 
