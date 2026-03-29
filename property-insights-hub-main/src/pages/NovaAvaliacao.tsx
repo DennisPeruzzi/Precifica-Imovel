@@ -14,6 +14,7 @@ import { pdf } from "@react-pdf/renderer"
 import { LaudoLocacaoPDF } from "@/features/pdf/LaudoLocacaoPDF";
 import { v4 as uuidv4 } from "uuid";
 import { MessageCircle } from "lucide-react";
+import { LaudoVendaPDF } from "@/features/pdf/LaudoVendaPDF";
 
 type DealType = "venda" | "locacao";
 
@@ -102,6 +103,9 @@ const NovaAvaliacao = () => {
   const [rentalResult, setRentalResult] = useState<RentalResult | null>(null);
 
   const [saleResult, setSaleResult] = useState<SaleResult | null>(null);
+
+  const [saleEvaluationId, setSaleEvaluationId] = useState<string | null>(null);
+  const [saleEvaluationCreatedAt, setSaleEvaluationCreatedAt] = useState<string | null>(null);
 
   const [profile, setProfile] = useState<{ nome: string | null; creci: string | null; plano: string | null; apelido: string | null } | null>(null);
 
@@ -477,32 +481,37 @@ try {
         estrategia === "maximizar" ? 90 :
         60;
 
-      const { error: insertError } = await supabase
-        .from("property_valuations")
-        .insert({
-          user_id: userId,
-          endereco: endereco || null,
-          bairro,
-          cidade: cidadeSelecionada?.name || cidadeNome,
-          tipo: tipo?.toLowerCase(),
-          metragem: area,
-          quartos: q,
-          banheiros: b,
-          vagas: v,
-          padrao,
-          estrategia,
-          valor_base_m2: finalSaleResult.valor_base_m2 ?? null,
-          preco_calculado: finalSaleResult.preco_calculado,
-          faixa_min: finalSaleResult.faixa_min,
-          faixa_max: finalSaleResult.faixa_max,
-          tempo_estimado: tempoEstimado,
-          status: "avaliado",
-        });
+      const { data: insertedSale, error: insertError } = await supabase
+      .from("property_valuations")
+      .insert({
+      user_id: userId,
+      endereco: endereco || null,
+      bairro,
+      cidade: cidadeSelecionada?.name || cidadeNome,
+      tipo: tipo?.toLowerCase(),
+      metragem: area,
+      quartos: q,
+      banheiros: b,
+      vagas: v,
+      padrao,
+      estrategia,
+      valor_base_m2: finalSaleResult.valor_base_m2 ?? null,
+      preco_calculado: finalSaleResult.preco_calculado,
+      faixa_min: finalSaleResult.faixa_min,
+      faixa_max: finalSaleResult.faixa_max,
+      tempo_estimado: tempoEstimado,
+      status: "avaliado",
+      })
+      .select("id, created_at")
+      .single();
 
       if (insertError) {
-        console.error("Erro ao salvar avaliação de venda:", insertError);
-        toast.error("Avaliação calculada, mas houve erro ao salvar.");
-      }
+      console.error("Erro ao salvar avaliação de venda:", insertError);
+      toast.error("Avaliação calculada, mas houve erro ao salvar.");
+    } else {
+      setSaleEvaluationId(insertedSale?.id ?? null);
+      setSaleEvaluationCreatedAt(insertedSale?.created_at ?? null);
+    }
 
       setShowResult(true);
       setStep(3);
@@ -838,6 +847,177 @@ if (dbError) {
     toast.error("Falha ao gerar o PDF.");
   }
 };
+
+    const handleGerarPdfVenda = async () => {
+    if (!saleResult?.ok) {
+    toast.error("Gere a avaliação antes de emitir o laudo.");
+    return;
+    }
+
+    if (!saleEvaluationId) {
+    toast.error("Avaliação de venda ainda não foi salva corretamente.");
+    return;
+    }
+
+    if (!profile) {
+    toast.error("Carregando seus dados (nome/CRECI)... tente novamente.");
+    return;
+    }
+
+    try {
+    const requestedTemplate = profile?.plano === "basic" ? "basic" : "premium";
+
+    const { data: authData, error: authErr } = await supabase.rpc("authorize_pdf_export", {
+      p_template: requestedTemplate,
+      p_evaluation_id: saleEvaluationId,
+      });
+
+      if (authErr) throw authErr;
+
+      const authRow = authData?.[0];
+
+      if (!authRow?.allowed) {
+        toast.error("Limite do plano Basic atingido", {
+          description: "Você pode emitir até 10 laudos em PDF por mês.",
+        });
+        return;
+      }
+
+      const template = authRow.enforced_template as "basic" | "premium";
+
+      const dataAvaliacao = saleEvaluationCreatedAt
+        ? new Date(saleEvaluationCreatedAt).toLocaleDateString("pt-BR")
+        : new Date().toLocaleDateString("pt-BR");
+
+      const estrategiaLabel =
+        saleResult.estrategia === "rapido"
+          ? "Venda rápida"
+          : saleResult.estrategia === "maximizar"
+          ? "Maximizar valor"
+          : "Venda normal";
+
+      const scopeLabel =
+        saleResult.scope === "bairro"
+          ? "Pesquisa local"
+          : saleResult.scope === "cidade"
+          ? "Pesquisa regional"
+          : saleResult.scope === "seed"
+          ? "Pesquisa de mercado"
+          : "Referência de mercado";
+
+      const baseDadosLabel =
+        saleResult.confidence === "alta"
+          ? "Referência muito confiável"
+          : saleResult.confidence === "media"
+          ? "Referência confiável"
+          : "Referência inicial";
+
+      const prazoEstimado =
+          saleResult.estrategia === "rapido"
+          ? "30 dias"
+          : saleResult.estrategia === "maximizar"
+          ? "90 dias"
+          : "60 dias";
+
+    let marketData = null;
+
+      if (template === "premium") {
+        marketData = {
+          preco_m2: saleResult.valor_base_m2
+            ? `${new Intl.NumberFormat("pt-BR", {
+               style: "currency",
+                currency: "BRL",
+                 minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              }).format(saleResult.valor_base_m2)}/m²`
+           : "—",
+          liquidez:
+            saleResult.confidence === "alta"
+             ? "Alta relevância comercial"
+              : saleResult.confidence === "media"
+              ? "Liquidez moderada"
+              : "Em observação",
+          tempo_medio: prazoEstimado,
+          desconto_medio: "—",
+        };
+      }
+
+    const d = {
+      market: marketData,
+      template,
+      corretorNome: profile?.apelido || profile?.nome || "Corretor",
+      creci: profile?.creci ?? "—",
+      dataAvaliacao,
+      endereco: endereco || null,
+      tipo: tipo ? tipo.charAt(0).toUpperCase() + tipo.slice(1) : "—",
+      metragem: metragem || "-",
+      quartos: quartos || "-",
+      banheiros: banheiros || "-",
+      vagas: vagas || "-",
+      padrao: padrao || null,
+      bairro: bairro || "-",
+      cidade: cidadeNome || "-",
+      estrategia: estrategiaLabel,
+      precoSugerido: formatBRL(saleResult.preco_calculado),
+      faixaMin: formatBRL(saleResult.faixa_min),
+      faixaMax: formatBRL(saleResult.faixa_max),
+      valorBaseM2: saleResult.valor_base_m2 ? formatBRL(saleResult.valor_base_m2) : "—",
+      prazoEstimado,
+      fonte: scopeLabel,
+      baseDados: baseDadosLabel,
+      comps: saleResult.comps_utilizadas ?? 0,
+      obs: "Laudo gerado com base na estratégia selecionada e nos dados atuais da avaliação.",
+    };
+
+    const blob = await pdf(<LaudoVendaPDF d={d} />).toBlob();
+
+    const { data: userRes, error: userErr } = await supabase.auth.getUser();
+    if (userErr) throw userErr;
+
+    const userId = userRes.user?.id;
+    if (!userId) throw new Error("Usuário não autenticado.");
+
+    const fileName = `laudo-venda-${uuidv4()}.pdf`;
+    const storagePath = `${userId}/venda/${fileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("reports")
+      .upload(storagePath, blob, {
+        contentType: "application/pdf",
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { error: dbError } = await supabase.from("reports").insert({
+      user_id: userId,
+      evaluation_id: saleEvaluationId,
+      storage_path: storagePath,
+      deal_type: "venda",
+      template,
+    });
+
+    if (dbError) throw dbError;
+
+    const { data: publicData } = supabase.storage.from("reports").getPublicUrl(storagePath);
+
+    if (!publicData?.publicUrl) {
+      throw new Error("Não foi possível obter o link do PDF.");
+    }
+
+    window.open(publicData.publicUrl, "_blank");
+
+    toast.success("Laudo de venda gerado com sucesso!", {
+      description:
+        template === "basic"
+          ? `Plano Basic: restam ${authRow.remaining} laudos neste mês.`
+          : "PDF premium pronto para visualização.",
+    });
+  } catch (err) {
+    console.error(err);
+    toast.error("Falha ao gerar o PDF de venda.");
+  }
+};
+
 
 const handleWhatsapp = async () => {
   try {
@@ -1403,7 +1583,29 @@ const ownerFriendlyMessage =
                         </span>
                       </p>
                     </div>
-                  </>
+
+                    <div className="mt-6 flex gap-3">
+                      <Button
+                      type="button"
+                      className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
+                      onClick={handleGerarPdfVenda}
+                      disabled={!saleResult?.ok}
+                      >
+                      Gerar Laudo PDF
+                      </Button>
+
+                      <Button
+                      type="button"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => navigate("/dashboard/vendidos")}
+                      >
+                      Ver Histórico
+                      </Button>
+                    </div>
+
+               </>
+
                 ) : (
                   <div className="rounded-lg border border-border bg-muted/30 p-4">
                     <p className="font-medium text-foreground">Sem dados suficientes</p>

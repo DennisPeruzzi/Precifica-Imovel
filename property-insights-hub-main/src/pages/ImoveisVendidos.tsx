@@ -10,6 +10,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,} from "@/components/ui/dialog";
+import { pdf } from "@react-pdf/renderer";
+import { v4 as uuidv4 } from "uuid";
+import { LaudoVendaPDF } from "@/features/pdf/LaudoVendaPDF";
 
 type SaleHistoryRow = {
   id: string;
@@ -85,6 +88,9 @@ const ImoveisVendidos = () => {
   const [selectedSale, setSelectedSale] = useState<SaleHistoryRow | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
+  const [profile, setProfile] = useState<{ nome: string | null; creci: string | null; plano: string | null; apelido: string | null; } | null>(null);
+
+  const [laudosEmitidos, setLaudosEmitidos] = useState<Record<string, boolean>>({});
 
   const handleViewDetails = (sale: SaleHistoryRow) => { setSelectedSale(sale); setDetailsOpen(true);};
 
@@ -123,6 +129,7 @@ const ImoveisVendidos = () => {
           preco_venda_real,
           status,
           vendido_em,
+          notes,
           created_at
         `)
         .eq("user_id", user.id)
@@ -130,7 +137,32 @@ const ImoveisVendidos = () => {
 
       if (error) throw error;
 
-      setItems((data as SaleHistoryRow[]) || []);
+      const sales = (data as SaleHistoryRow[]) || [];
+      setItems(sales);
+
+      const ids = sales.map((item) => item.id);
+
+      if (ids.length > 0) {
+      const { data: reportRows, error: reportError } = await supabase
+      .from("reports")
+      .select("evaluation_id")
+      .eq("deal_type", "venda")
+      .in("evaluation_id", ids);
+
+      if (reportError) throw reportError;
+
+      const map: Record<string, boolean> = {};
+        (reportRows || []).forEach((rep: any) => {
+      if (rep.evaluation_id) {
+        map[rep.evaluation_id] = true;
+      }
+    });
+
+      setLaudosEmitidos(map);
+    } else {
+      setLaudosEmitidos({});
+    }
+
     } catch (err) {
       console.error(err);
       toast.error("Erro ao carregar histórico de vendas.");
@@ -175,6 +207,33 @@ const ImoveisVendidos = () => {
       );
     });
   }, [items, search, statusFilter, tipoFilter, estrategiaFilter, padraoFilter]);
+
+useEffect(() => {
+  const loadProfile = async () => {
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) throw userError;
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("nome, creci, plano, apelido")
+        .eq("id", user.id)
+        .single();
+
+      if (error) throw error;
+      setProfile(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  loadProfile();
+}, []);
 
   const totalAvaliacoes = filteredItems.length;
 
@@ -284,10 +343,36 @@ const ImoveisVendidos = () => {
     }
   };
 
-  const handleGerarPdf = (item: SaleHistoryRow) => {
-    console.log("Gerar PDF venda:", item);
-    toast("PDF de venda será implementado na próxima etapa.");
-  };
+    const handleVerLaudo = async (evaluationId: string) => {
+    try {
+    const { data: report, error } = await supabase
+      .from("reports")
+      .select("storage_path")
+      .eq("evaluation_id", evaluationId)
+      .eq("deal_type", "venda")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!report?.storage_path) {
+      toast.error("Laudo ainda não emitido para esta avaliação.");
+      return;
+    }
+
+    const { data } = supabase.storage.from("reports").getPublicUrl(report.storage_path);
+
+    if (!data?.publicUrl) {
+      throw new Error("Não foi possível obter o link do PDF.");
+    }
+
+    window.open(data.publicUrl, "_blank");
+  } catch (err) {
+    console.error(err);
+    toast.error("Falha ao abrir o laudo.");
+  }
+};
 
     const clearFilters = () => {
     setSearch("");
@@ -571,14 +656,16 @@ const ImoveisVendidos = () => {
 
                       <td className="px-4 py-3 align-top">
                         <div className="flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleGerarPdf(item)}
-                          >
-                            Gerar PDF
-                          </Button>
+                          {laudosEmitidos[item.id] ? (
+                            <Button type="button" variant="outline" size="sm" onClick={() => handleVerLaudo(item.id)} >
+                              Ver Laudo
+                            </Button>
+                            
+                        ) : (
+                             <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-muted text-muted-foreground">
+                              Laudo não emitido
+                              </span>
+                            )}
 
                           <Button
                             variant="outline"

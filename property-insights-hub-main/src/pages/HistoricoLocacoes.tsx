@@ -62,6 +62,7 @@ export default function HistoricoLocacoes() {
   const [rows, setRows] = useState<RentalValuationRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [laudosEmitidos, setLaudosEmitidos] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     load();
@@ -132,10 +133,34 @@ export default function HistoricoLocacoes() {
 
       console.log("[HistoricoLocacoes] resposta supabase:", res);
 
-      const { data, error } = res;
-      if (error) throw error;
+     const { data, error } = res;
+    if (error) throw error;
 
-      setRows((data ?? []) as RentalValuationRow[]);
+      const rentalRows = (data ?? []) as RentalValuationRow[];
+      setRows(rentalRows);
+
+      const ids = rentalRows.map((r) => r.id);
+
+    if (ids.length > 0) {
+      const { data: reportRows, error: reportError } = await supabase
+      .from("reports")
+      .select("evaluation_id")
+      .eq("deal_type", "locacao")
+      .in("evaluation_id", ids);
+
+    if (reportError) throw reportError;
+
+      const map: Record<string, boolean> = {};
+      (reportRows || []).forEach((rep: any) => {
+    if (rep.evaluation_id) {
+        map[rep.evaluation_id] = true;
+    }
+  });
+
+       setLaudosEmitidos(map);
+      } else {
+        setLaudosEmitidos({});
+      }
     } catch (err: any) {
       console.error("[HistoricoLocacoes] ERRO no load():", err);
       setErrorMsg(err?.message ?? "Erro ao carregar histórico.");
@@ -300,7 +325,7 @@ export default function HistoricoLocacoes() {
       if (error) throw error;
 
       if (!report?.storage_path) {
-        toast("Este laudo ainda não foi gerado por esta tela.");
+        toast("Laudo ainda não emitido para esta avaliação.");
         return;
       }
 
@@ -503,16 +528,16 @@ export default function HistoricoLocacoes() {
 
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleGerarPdf(r);
-                            }}
-                          >
-                            Gerar PDF
-                          </Button>
+                          {laudosEmitidos[r.id] ? (
+                            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); handleGerarPdf(r); }}
+                            >
+                            Ver Laudo
+                            </Button>
+                          ) : (
+                            <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-muted text-muted-foreground">
+                             Laudo não emitido
+                            </span>
+                          )}
 
                           <Button
                             variant="outline"
