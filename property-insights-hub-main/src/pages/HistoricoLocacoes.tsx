@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LocacaoDetalheModal } from "@/components/LocacaoDetalheModal";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 
 const ALL = "__ALL__";
 
@@ -17,21 +19,44 @@ type RentalValuationRow = {
   padrao: string;
   area_m2: number;
   quartos: number | null;
+  banheiros?: number | null;
   vagas: number | null;
   mobiliado: boolean | null;
+  possui_edicula?: boolean | null;
   rent_estimada: number | null;
   rent_min: number | null;
   rent_max: number | null;
   confidence: string | null;
   explain_json: any;
+  status?: string | null;
+  valor_anunciado?: number | null;
+  rent_real?: number | null;
+  dias_para_locar?: number | null;
+  percentual_desconto?: number | null;
+  locado_em?: string | null;
+  notes?: string | null;
 };
 
 const formatBRL = (value?: number | null) => {
   if (value === null || value === undefined) return "-";
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
 };
 
 const formatDateTimeBR = (iso: string) => new Date(iso).toLocaleString("pt-BR");
+
+const getScopeLabel = (row: RentalValuationRow) => {
+  const scope = row?.explain_json?.source ?? row?.explain_json?.final?.scope ?? row?.explain_json?.raw?.scope;
+
+  if (scope === "seed" || scope === "market_rent_m2") return "Pesquisa de mercado";
+  if (scope === "bairro") return "Pesquisa local";
+  if (scope === "cidade") return "Pesquisa regional";
+  if (scope === "learned" || scope === "learned_rent_m2") return "Pesquisa local";
+  if (scope === "fallback") return "Fallback";
+  return "Referência de mercado";
+};
 
 export default function HistoricoLocacoes() {
   const [rows, setRows] = useState<RentalValuationRow[]>([]);
@@ -39,26 +64,32 @@ export default function HistoricoLocacoes() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
-  load();
-}, []);
+    load();
+  }, []);
 
-  // filtros
   const [q, setQ] = useState("");
   const [cidade, setCidade] = useState(ALL);
   const [bairro, setBairro] = useState(ALL);
   const [tipo, setTipo] = useState(ALL);
   const [padrao, setPadrao] = useState(ALL);
 
-  // modal detalhe
   const [selected, setSelected] = useState<RentalValuationRow | null>(null);
   const [openModal, setOpenModal] = useState(false);
+
+  const [openLocadoModal, setOpenLocadoModal] = useState(false);
+  const [selectedLocacao, setSelectedLocacao] = useState<RentalValuationRow | null>(null);
+
+  const [precoAnunciado, setPrecoAnunciado] = useState("");
+  const [precoLocado, setPrecoLocado] = useState("");
+  const [diasParaAlugar, setDiasParaAlugar] = useState("");
 
   const filtered = useMemo(() => {
     const query = q.trim().toLowerCase();
 
     return rows.filter((r) => {
       const matchesQuery =
-        !query || `${r.cidade} ${r.bairro} ${r.tipo} ${r.padrao}`.toLowerCase().includes(query);
+        !query ||
+        `${r.cidade} ${r.bairro} ${r.tipo} ${r.padrao}`.toLowerCase().includes(query);
 
       const matchesCidade = cidade === ALL || r.cidade === cidade;
       const matchesBairro = bairro === ALL || r.bairro === bairro;
@@ -81,41 +112,39 @@ export default function HistoricoLocacoes() {
   const tipos = useMemo(() => Array.from(new Set(rows.map((r) => r.tipo))).sort(), [rows]);
   const padroes = useMemo(() => Array.from(new Set(rows.map((r) => r.padrao))).sort(), [rows]);
 
- const load = async () => {
-  console.log("[HistoricoLocacoes] load() iniciou");
-  setLoading(true);
-  setErrorMsg(null);
+  const load = async () => {
+    console.log("[HistoricoLocacoes] load() iniciou");
+    setLoading(true);
+    setErrorMsg(null);
 
-  try {
-    // trava de segurança: se demorar mais de 8s, dá erro controlado
-    const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Timeout ao buscar no Supabase (8s)")), 8000)
-    );
+    try {
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Timeout ao buscar no Supabase (8s)")), 8000)
+      );
 
-    const request = supabase
-      .from("rental_valuations")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(200);
+      const request = supabase
+        .from("rental_valuations")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(200);
 
-    const res: any = await Promise.race([request, timeout]);
+      const res: any = await Promise.race([request, timeout]);
 
-    console.log("[HistoricoLocacoes] resposta supabase:", res);
+      console.log("[HistoricoLocacoes] resposta supabase:", res);
 
-    const { data, error } = res;
-    if (error) throw error;
+      const { data, error } = res;
+      if (error) throw error;
 
-    setRows((data ?? []) as RentalValuationRow[]);
-  } catch (err: any) {
-    console.error("[HistoricoLocacoes] ERRO no load():", err);
-    setErrorMsg(err?.message ?? "Erro ao carregar histórico.");
-  } finally {
-    console.log("[HistoricoLocacoes] load() finalizou -> setLoading(false)");
-    setLoading(false);
-  }
-};
+      setRows((data ?? []) as RentalValuationRow[]);
+    } catch (err: any) {
+      console.error("[HistoricoLocacoes] ERRO no load():", err);
+      setErrorMsg(err?.message ?? "Erro ao carregar histórico.");
+    } finally {
+      console.log("[HistoricoLocacoes] load() finalizou -> setLoading(false)");
+      setLoading(false);
+    }
+  };
 
-  // ===== CSV helpers =====
   const csvEscape = (v: any) => {
     if (v === null || v === undefined) return "";
     const s = String(v);
@@ -140,6 +169,7 @@ export default function HistoricoLocacoes() {
       "padrao",
       "area_m2",
       "quartos",
+      "banheiros",
       "vagas",
       "mobiliado",
       "aluguel_estimado",
@@ -161,6 +191,7 @@ export default function HistoricoLocacoes() {
           r.padrao,
           r.area_m2,
           r.quartos ?? "",
+          r.banheiros ?? "",
           r.vagas ?? "",
           r.mobiliado ? "sim" : "nao",
           r.rent_estimada ?? "",
@@ -191,59 +222,110 @@ export default function HistoricoLocacoes() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+
+    toast.success("CSV exportado com sucesso!");
   };
 
-  const [openLocadoModal, setOpenLocadoModal] = useState(false);
-  const [selectedLocacao, setSelectedLocacao] = useState<any>(null);
-
-  const [precoAnunciado, setPrecoAnunciado] = useState("");
-  const [precoLocado, setPrecoLocado] = useState("");
-  const [diasParaAlugar, setDiasParaAlugar] = useState("");
-
   const handleSalvarLocacao = async () => {
+    if (!selectedLocacao) return;
 
-  if(!selectedLocacao) return
+    const anunciado = Number(precoAnunciado);
+    const locado = Number(precoLocado);
+    const dias = Number(diasParaAlugar);
 
-const anunciado = Number(precoAnunciado)
-const locado = Number(precoLocado)
-const dias = Number(diasParaAlugar)
+    if (!anunciado || !locado) {
+      toast.error("Preencha os valores obrigatórios.");
+      return;
+    }
 
-if(!anunciado || !locado){
-alert("Preencha os valores")
-return
-}
+    const desconto = ((anunciado - locado) / anunciado) * 100;
 
-const desconto =
-((anunciado - locado)/anunciado)*100
+    const { error } = await supabase
+      .from("rental_valuations")
+      .update({
+        status: "locado",
+        valor_anunciado: anunciado,
+        rent_real: locado,
+        dias_para_locar: dias,
+        percentual_desconto: desconto,
+        locado_em: new Date().toISOString(),
+      })
+      .eq("id", selectedLocacao.id);
 
-const { error } = await supabase
-.from("rental_valuations")
-.update({
-status:"locado",
-valor_anunciado: anunciado,
-rent_real: locado,
-dias_para_locar: dias,
-percentual_desconto: desconto,
-locado_em:new Date().toISOString()
-})
-.eq("id",selectedLocacao.id)
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
 
-if(error){
-alert(error.message)
-return
-}
+    setOpenLocadoModal(false);
+    setSelectedLocacao(null);
+    setPrecoAnunciado("");
+    setPrecoLocado("");
+    setDiasParaAlugar("");
 
-setOpenLocadoModal(false)
+    await load();
+    toast.success("Locação registrada com sucesso.");
+  };
 
-await load()
+  const handleDelete = async (id: string) => {
+    if (!confirm("Deseja excluir esta avaliação?")) return;
 
-}
+    const { error } = await supabase.from("rental_valuations").delete().eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    await load();
+    toast.success("Avaliação excluída com sucesso.");
+  };
+
+  const handleVerDetalhes = (row: RentalValuationRow) => {
+    setSelected(row);
+    setOpenModal(true);
+  };
+
+  const handleGerarPdf = async (row: RentalValuationRow) => {
+    try {
+      const { data: report, error } = await supabase
+        .from("reports")
+        .select("storage_path")
+        .eq("evaluation_id", row.id)
+        .eq("deal_type", "locacao")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw error;
+
+      if (!report?.storage_path) {
+        toast("Este laudo ainda não foi gerado por esta tela.");
+        return;
+      }
+
+      const { data } = supabase.storage.from("reports").getPublicUrl(report.storage_path);
+
+      if (!data?.publicUrl) {
+        toast.error("Não foi possível obter o link do PDF.");
+        return;
+      }
+
+      window.open(data.publicUrl, "_blank");
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao abrir o PDF.");
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-display font-bold text-foreground">Histórico de Locações</h1>
+            <h1 className="text-2xl font-display font-bold text-foreground">
+              Histórico de Locações
+            </h1>
             <p className="text-sm text-muted-foreground mt-1">
               Últimas estimativas de aluguel geradas (aluguel separado de custos)
             </p>
@@ -259,7 +341,6 @@ await load()
           </div>
         </div>
 
-        {/* filtros */}
         <div className="rounded-xl border border-border bg-card p-4 shadow-card space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
             <Input
@@ -346,7 +427,6 @@ await load()
           )}
         </div>
 
-        {/* tabela */}
         <div className="rounded-xl border border-border bg-card shadow-card overflow-hidden">
           <div className="px-4 py-3 border-b border-border flex items-center justify-between">
             <p className="text-sm text-muted-foreground">
@@ -376,88 +456,108 @@ await load()
                   {filtered.map((r) => (
                     <tr
                       key={r.id}
-                      className="border-t border-border hover:bg-muted/30 transition-colors cursor-pointer"
-                      onClick={() => {
-                        setSelected(r);
-                        setOpenModal(true);
-                      }}
-
+                      className="border-t border-border hover:bg-muted/30 transition-colors"
                     >
                       <td className="px-4 py-3 whitespace-nowrap">{formatDateTimeBR(r.created_at)}</td>
+
                       <td className="px-4 py-3">
                         <div className="font-medium text-foreground">{r.bairro}</div>
                         <div className="text-xs text-muted-foreground">{r.cidade}</div>
                       </td>
+
                       <td className="px-4 py-3">
                         <div className="font-medium text-foreground">
                           {r.tipo} • {r.padrao}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {r.area_m2}m² • {r.quartos ?? 0}q • {r.vagas ?? 0}v •{" "}
-                          {r.mobiliado ? "Mobiliado" : "Não mobiliado"}
+                          {r.area_m2}m² • {r.quartos ?? 0}q • {r.vagas ?? 0}v • {r.mobiliado ? "Mobiliado" : "Não mobiliado"}
                         </div>
                       </td>
-                      <td className="px-4 py-3 font-semibold text-foreground">{formatBRL(r.rent_estimada)}</td>
+
+                      <td className="px-4 py-3 font-semibold text-foreground">
+                        {formatBRL(r.rent_estimada)}
+                      </td>
+
                       <td className="px-4 py-3 text-muted-foreground">
                         {formatBRL(r.rent_min)} – {formatBRL(r.rent_max)}
                       </td>
 
                       <td className="px-4 py-3">
-                       <div className="flex gap-2 items-center">
-
-                       {r.status !== "locado" && (
-                      <Button  variant="outline"  size="sm"  onClick={(e) => {
-                      e.stopPropagation()
-                       setSelectedLocacao(r)
-                      setOpenLocadoModal(true)
-                      }}
-                    >
-                    Imóvel Locado ?
-                      </Button>
-                    )}
-
-                      {r.status !== "locado" && (
-                    <Button variant="destructive"  size="sm" onClick={async (e) => {
-                    e.stopPropagation()
-
-                    if (!confirm("Deseja excluir esta avaliação?")) return
-
-                     const { error } = await supabase
-                     .from("rental_valuations")
-                     .delete()
-                     .eq("id", r.id)
-
-                     if (error) {
-                     alert(error.message)
-                     return
-                      }
-
-                    await load()
-                    }}
-                    >
-                     Excluir
-                    </Button>
-                   )}
-
-                     {r.status === "locado" && ( <span className="text-xs text-muted-foreground">
-                       Locação registrada
-                    </span>
-                      )}
-
-                   </div>
+                        <div className="text-sm font-medium text-card-foreground">
+                          {getScopeLabel(r)}
+                        </div>
+                        <div className="mt-2">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                              (r.confidence ?? "").toLowerCase() === "alta"
+                                ? "bg-green-500/10 text-green-600"
+                                : (r.confidence ?? "").toLowerCase() === "media"
+                                ? "bg-yellow-500/10 text-yellow-700"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {(r.confidence ?? "baixa").toUpperCase()}
+                          </span>
+                        </div>
                       </td>
+
                       <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                            (r.confidence ?? "").toLowerCase() === "alta"
-                              ? "bg-green-500/10 text-green-600"
-                              : (r.confidence ?? "").toLowerCase() === "media"
-                              ? "bg-yellow-500/10 text-yellow-700"
-                              : "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {(r.confidence ?? "baixa").toUpperCase()}
-                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleGerarPdf(r);
+                            }}
+                          >
+                            Gerar PDF
+                          </Button>
+
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleVerDetalhes(r);
+                            }}
+                          >
+                            Ver Detalhes
+                          </Button>
+
+                          {r.status !== "locado" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedLocacao(r);
+                                setOpenLocadoModal(true);
+                              }}
+                            >
+                              Imóvel Locado?
+                            </Button>
+                          )}
+
+                          {r.status !== "locado" && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(r.id);
+                              }}
+                            >
+                              Excluir
+                            </Button>
+                          )}
+
+                          {r.status === "locado" && (
+                            <span className="inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-green-500/10 text-green-600">
+                              Locação registrada
+                            </span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -469,108 +569,131 @@ await load()
       </div>
 
       <LocacaoDetalheModal open={openModal} onOpenChange={setOpenModal} row={selected} />
-        {openLocadoModal && selectedLocacao && (
 
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-
-<div className="bg-white rounded-xl shadow-xl w-[460px] p-6 space-y-5">
-
-<h2 className="text-lg font-semibold">
-Registrar locação
-</h2>
-
-<p className="text-sm text-muted-foreground">
-Informe os dados reais da locação para alimentar a inteligência de mercado.
-</p>
-
-<div className="grid gap-4">
-
-<div>
-<label className="text-sm">Preço anunciado</label>
-<input
-className="w-full border rounded px-3 py-2 mt-1"
-value={precoAnunciado}
-onChange={(e)=>setPrecoAnunciado(e.target.value)}
-placeholder="Ex: 3500"
-/>
-</div>
-
-<div>
-<label className="text-sm">Preço que foi locado</label>
-<input
-className="w-full border rounded px-3 py-2 mt-1"
-value={precoLocado}
-onChange={(e)=>setPrecoLocado(e.target.value)}
-placeholder="Ex: 3200"
-/>
-</div>
-
-<div>
-<label className="text-sm">Dias para alugar</label>
-<input
-className="w-full border rounded px-3 py-2 mt-1"
-value={diasParaAlugar}
-onChange={(e)=>setDiasParaAlugar(e.target.value)}
-placeholder="Ex: 18"
-/>
-</div>
-
-</div>
-
-{/* RESULTADOS AUTOMÁTICOS */}
-
-{precoAnunciado && precoLocado && (
-
-<div className="bg-muted/40 rounded-lg p-4 space-y-2 text-sm">
-
-<p>
-Desconto da negociação:
-<strong>
-{" "}
-{(
-((Number(precoAnunciado)-Number(precoLocado))/
-Number(precoAnunciado))*100
-).toFixed(2)}%
-</strong>
-</p>
-
-<p>
-Preço final por m²:
-<strong>
-{" "}
-R$ {(Number(precoLocado)/selectedLocacao.area_m2).toFixed(2)}
-</strong>
-</p>
-
-</div>
-
-)}
-
-<div className="flex justify-end gap-3 pt-2">
-
-<button
-onClick={()=>setOpenLocadoModal(false)}
-className="px-4 py-2 border rounded"
+      <Dialog
+  open={openLocadoModal}
+  onOpenChange={(open) => {
+    setOpenLocadoModal(open);
+    if (!open) {
+      setSelectedLocacao(null);
+      setPrecoAnunciado("");
+      setPrecoLocado("");
+      setDiasParaAlugar("");
+    }
+  }}
 >
-Cancelar
-</button>
+  <DialogContent className="sm:max-w-lg">
+    <DialogHeader>
+      <DialogTitle>Registrar locação</DialogTitle>
+      <DialogDescription>
+        Informe os dados reais da locação para alimentar a inteligência de mercado.
+      </DialogDescription>
+    </DialogHeader>
 
-<button
-onClick={handleSalvarLocacao}
-className="px-4 py-2 bg-blue-600 text-white rounded"
->
-Salvar locação
-</button>
+    {selectedLocacao && (
+      <div className="space-y-5">
+        <div className="rounded-xl border p-4 space-y-2">
+          <h3 className="font-semibold text-foreground">Resumo do imóvel</h3>
+          <div className="text-sm text-muted-foreground space-y-1">
+            <p>
+              <span className="font-medium text-foreground">Local:</span>{" "}
+              {selectedLocacao.bairro} / {selectedLocacao.cidade}
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Imóvel:</span>{" "}
+              {selectedLocacao.tipo} • {selectedLocacao.padrao}
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Metragem:</span>{" "}
+              {selectedLocacao.area_m2} m²
+            </p>
+            <p>
+              <span className="font-medium text-foreground">Aluguel estimado:</span>{" "}
+              {formatBRL(selectedLocacao.rent_estimada)}
+            </p>
+          </div>
+        </div>
 
-</div>
+        <div className="grid gap-4">
+          <div>
+            <label className="text-sm font-medium text-foreground">Preço anunciado</label>
+            <Input
+              value={precoAnunciado}
+              onChange={(e) => setPrecoAnunciado(e.target.value)}
+              placeholder="Ex: 3500"
+              inputMode="decimal"
+              className="mt-1"
+            />
+          </div>
 
-</div>
-</div>
-)}
+          <div>
+            <label className="text-sm font-medium text-foreground">Preço que foi locado</label>
+            <Input
+              value={precoLocado}
+              onChange={(e) => setPrecoLocado(e.target.value)}
+              placeholder="Ex: 3200"
+              inputMode="decimal"
+              className="mt-1"
+            />
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-foreground">Dias para alugar</label>
+            <Input
+              value={diasParaAlugar}
+              onChange={(e) => setDiasParaAlugar(e.target.value)}
+              placeholder="Ex: 18"
+              inputMode="numeric"
+              className="mt-1"
+            />
+          </div>
+        </div>
+
+        {precoAnunciado && precoLocado && Number(precoAnunciado) > 0 && Number(precoLocado) > 0 && (
+          <div className="rounded-xl border bg-muted/30 p-4 space-y-2 text-sm">
+            <p>
+              <span className="font-medium text-foreground">Desconto da negociação:</span>{" "}
+              <strong>
+                {(
+                  ((Number(precoAnunciado) - Number(precoLocado)) / Number(precoAnunciado)) *
+                  100
+                ).toFixed(2)}
+                %
+              </strong>
+            </p>
+
+            <p>
+              <span className="font-medium text-foreground">Preço final por m²:</span>{" "}
+              <strong>
+                {formatBRL(Number(precoLocado) / selectedLocacao.area_m2)}
+              </strong>
+            </p>
+          </div>
+        )}
+      </div>
+    )}
+
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() => {
+          setOpenLocadoModal(false);
+          setSelectedLocacao(null);
+          setPrecoAnunciado("");
+          setPrecoLocado("");
+          setDiasParaAlugar("");
+        }}
+      >
+        Cancelar
+      </Button>
+
+      <Button onClick={handleSalvarLocacao}>
+        Salvar locação
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
+
     </DashboardLayout>
   );
 }
-
-
-
-

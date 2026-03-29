@@ -1,12 +1,13 @@
-import { useMemo } from "react";
-import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 type RentalValuationRow = {
   id: string;
@@ -17,134 +18,215 @@ type RentalValuationRow = {
   padrao: string;
   area_m2: number;
   quartos: number | null;
+  banheiros?: number | null;
   vagas: number | null;
   mobiliado: boolean | null;
+  possui_edicula?: boolean | null;
   rent_estimada: number | null;
   rent_min: number | null;
   rent_max: number | null;
   confidence: string | null;
   explain_json: any;
+  status?: string | null;
+  valor_anunciado?: number | null;
+  rent_real?: number | null;
+  dias_para_locar?: number | null;
+  percentual_desconto?: number | null;
+  locado_em?: string | null;
+  notes?: string | null;
 };
 
-const formatBRL = (value?: number | null) => {
-  if (value === null || value === undefined) return "-";
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
+type LocacaoDetalheModalProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  row: RentalValuationRow | null;
 };
 
-const formatDateTimeBR = (iso: string) => new Date(iso).toLocaleString("pt-BR");
+const formatCurrency = (value?: number | null) => {
+  if (value === null || value === undefined) return "—";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+};
 
-function safeStringify(value: any) {
-  try {
-    return JSON.stringify(value ?? null, null, 2);
-  } catch {
-    return String(value);
-  }
-}
+const formatDate = (value?: string | null) => {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("pt-BR");
+};
+
+const formatDateTime = (value?: string | null) => {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("pt-BR");
+};
+
+const getScopeLabel = (row?: RentalValuationRow | null) => {
+  const scope =
+    row?.explain_json?.source ??
+    row?.explain_json?.final?.scope ??
+    row?.explain_json?.raw?.scope;
+
+  if (scope === "seed" || scope === "market_rent_m2") return "Pesquisa de mercado";
+  if (scope === "bairro") return "Pesquisa local";
+  if (scope === "cidade") return "Pesquisa regional";
+  if (scope === "learned" || scope === "learned_rent_m2") return "Pesquisa local";
+  if (scope === "fallback") return "Fallback";
+  return "Referência de mercado";
+};
+
+const getConfidenceLabel = (confidence?: string | null) => {
+  if (!confidence) return "Baixa";
+  if (confidence.toLowerCase() === "alta") return "Alta";
+  if (confidence.toLowerCase() === "media") return "Média";
+  return "Baixa";
+};
+
+const getStatusLabel = (status?: string | null) => {
+  if (status === "locado") return "Locado";
+  return "Avaliado";
+};
 
 export function LocacaoDetalheModal({
   open,
   onOpenChange,
   row,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  row: RentalValuationRow | null;
-}) {
-  const jsonText = useMemo(() => safeStringify(row?.explain_json), [row]);
-
-  const copyResumo = async () => {
-    if (!row) return;
-    const resumo =
-      [
-        `Histórico de Locação`,
-        `Data: ${formatDateTimeBR(row.created_at)}`,
-        `Local: ${row.bairro} - ${row.cidade}`,
-        `Imóvel: ${row.tipo} • ${row.padrao} • ${row.area_m2}m² • ${row.quartos ?? 0}q • ${row.vagas ?? 0}v • ${
-          row.mobiliado ? "Mobiliado" : "Não mobiliado"
-        }`,
-        `Aluguel estimado: ${formatBRL(row.rent_estimada)}`,
-        `Faixa: ${formatBRL(row.rent_min)} – ${formatBRL(row.rent_max)}`,
-        `base de dados: ${(row.confidence ?? "baixa").toUpperCase()}`,
-      ].join("\n") + "\n";
-
-    await navigator.clipboard.writeText(resumo);
-  };
-
-  const copyJson = async () => {
-    await navigator.clipboard.writeText(jsonText);
-  };
-
+}: LocacaoDetalheModalProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Detalhes da Locação</DialogTitle>
-          <DialogDescription>Resumo + explain_json</DialogDescription>
+          <DialogTitle>Detalhes da Avaliação de Locação</DialogTitle>
+          <DialogDescription>
+            Visualize os dados completos da estimativa de aluguel realizada.
+          </DialogDescription>
         </DialogHeader>
 
-        {!row ? (
-          <div className="text-sm text-muted-foreground">Sem dados para exibir.</div>
-        ) : (
-          <div className="space-y-4">
-            <div className="rounded-xl border border-border bg-card p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm text-muted-foreground">Data</div>
-                  <div className="font-medium">{formatDateTimeBR(row.created_at)}</div>
-                </div>
-
-                <div className="text-right">
-                  <div className="text-sm text-muted-foreground">Aluguel estimado</div>
-                  <div className="text-xl font-bold">{formatBRL(row.rent_estimada)}</div>
-                  <div className="text-xs text-muted-foreground">
-                    Faixa: {formatBRL(row.rent_min)} – {formatBRL(row.rent_max)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div className="rounded-lg bg-muted/30 p-3">
-                  <div className="text-xs text-muted-foreground">Local</div>
-                  <div className="font-medium">{row.bairro}</div>
-                  <div className="text-xs text-muted-foreground">{row.cidade}</div>
-                </div>
-
-                <div className="rounded-lg bg-muted/30 p-3">
-                  <div className="text-xs text-muted-foreground">Imóvel</div>
-                  <div className="font-medium">
-                    {row.tipo} • {row.padrao}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {row.area_m2}m² • {row.quartos ?? 0}q • {row.vagas ?? 0}v •{" "}
-                    {row.mobiliado ? "Mobiliado" : "Não mobiliado"}
-                  </div>
-                </div>
-
-                <div className="rounded-lg bg-muted/30 p-3">
-                  <div className="text-xs text-muted-foreground">Base de dados</div>
-                  <div className="font-medium">{(row.confidence ?? "baixa").toUpperCase()}</div>
+        {row && (
+          <div className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border p-4 space-y-2">
+                <h3 className="font-semibold text-foreground">Imóvel</h3>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>
+                    <span className="font-medium text-foreground">Bairro:</span> {row.bairro || "—"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Cidade:</span> {row.cidade || "—"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Tipo:</span> {row.tipo || "—"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Padrão:</span> {row.padrao || "—"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Metragem:</span>{" "}
+                    {row.area_m2 ? `${row.area_m2} m²` : "—"}
+                  </p>
                 </div>
               </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Button variant="outline" onClick={copyResumo}>
-                  Copiar resumo
-                </Button>
-                <Button variant="outline" onClick={copyJson}>
-                  Copiar JSON
-                </Button>
+              <div className="rounded-xl border p-4 space-y-2">
+                <h3 className="font-semibold text-foreground">Características</h3>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>
+                    <span className="font-medium text-foreground">Quartos:</span> {row.quartos ?? "—"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Banheiros:</span> {row.banheiros ?? "—"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Vagas:</span> {row.vagas ?? "—"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Mobiliado:</span>{" "}
+                    {row.mobiliado ? "Sim" : "Não"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Edícula:</span>{" "}
+                    {row.possui_edicula ? "Sim" : "Não"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Status:</span>{" "}
+                    <Badge variant={row.status === "locado" ? "default" : "secondary"}>
+                      {getStatusLabel(row.status)}
+                    </Badge>
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                <p className="text-sm font-medium">Explicação (JSON)</p>
-                <p className="text-xs text-muted-foreground">explain_json</p>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border p-4 space-y-2">
+                <h3 className="font-semibold text-foreground">Precificação</h3>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>
+                    <span className="font-medium text-foreground">Aluguel estimado:</span>{" "}
+                    {formatCurrency(row.rent_estimada)}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Faixa mínima:</span>{" "}
+                    {formatCurrency(row.rent_min)}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Faixa máxima:</span>{" "}
+                    {formatCurrency(row.rent_max)}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Base de dados:</span>{" "}
+                    {getScopeLabel(row)}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Confiança:</span>{" "}
+                    {getConfidenceLabel(row.confidence)}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Data da avaliação:</span>{" "}
+                    {formatDateTime(row.created_at)}
+                  </p>
+                </div>
               </div>
-              <pre className="p-4 text-xs overflow-auto max-h-[420px] bg-muted/20">{jsonText}</pre>
+
+              <div className="rounded-xl border p-4 space-y-2">
+                <h3 className="font-semibold text-foreground">Locação Real</h3>
+                <div className="text-sm text-muted-foreground space-y-1">
+                  <p>
+                    <span className="font-medium text-foreground">Valor anunciado:</span>{" "}
+                    {formatCurrency(row.valor_anunciado)}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Valor locado:</span>{" "}
+                    {formatCurrency(row.rent_real)}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Dias para alugar:</span>{" "}
+                    {row.dias_para_locar ?? "—"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Desconto:</span>{" "}
+                    {row.percentual_desconto !== null && row.percentual_desconto !== undefined
+                      ? `${row.percentual_desconto.toFixed(2)}%`
+                      : "—"}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Locado em:</span>{" "}
+                    {formatDate(row.locado_em)}
+                  </p>
+                  <p>
+                    <span className="font-medium text-foreground">Observações:</span>{" "}
+                    {row.notes || "—"}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Fechar
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
