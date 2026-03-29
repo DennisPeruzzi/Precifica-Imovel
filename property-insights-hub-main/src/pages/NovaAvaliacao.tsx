@@ -41,6 +41,27 @@ type RentalResult =
       comps_utilizadas?: number;
     };
 
+type SaleResult =
+  | {
+      ok: true;
+      preco_calculado: number;
+      faixa_min: number;
+      faixa_max: number;
+      confidence: "alta" | "media" | "baixa";
+      scope: "bairro" | "cidade" | "seed" | "none";
+      comps_utilizadas: number;
+      valor_base_m2?: number;
+      estrategia?: "normal" | "rapido" | "maximizar";
+      message?: string;
+    }
+  | {
+      ok: false;
+      message: string;
+      confidence?: "alta" | "media" | "baixa";
+      scope?: "bairro" | "cidade" | "seed" | "none";
+      comps_utilizadas?: number;
+    };
+
 const NovaAvaliacao = () => {
   
   const navigate = useNavigate();
@@ -80,11 +101,13 @@ const NovaAvaliacao = () => {
   // Resultado
   const [rentalResult, setRentalResult] = useState<RentalResult | null>(null);
 
+  const [saleResult, setSaleResult] = useState<SaleResult | null>(null);
+
   const [profile, setProfile] = useState<{ nome: string | null; creci: string | null; plano: string | null; apelido: string | null } | null>(null);
 
   const cidadeNome = cidades.find((c) => c.id === cidade)?.name || cidade
 
-useEffect(() => {
+  useEffect(() => {
   const loadProfile = async () => {
     const { data: userRes, error: userErr } = await supabase.auth.getUser();
     if (userErr) {
@@ -111,9 +134,9 @@ useEffect(() => {
   };
 
   loadProfile();
-}, []);
+  }, []);
 
-useEffect(() => {
+  useEffect(() => {
 
   const loadCidades = async () => {
 
@@ -133,9 +156,9 @@ useEffect(() => {
 
   loadCidades();
 
-}, []);
+  }, []);
 
-useEffect(() => {
+  useEffect(() => {
 
   if (!cidade) return;
 
@@ -158,7 +181,7 @@ useEffect(() => {
 
   loadBairros();
 
-}, [cidade]);
+  }, [cidade]);
 
   const stepLabel = useMemo(() => {
     if (step === 1) return "Localização";
@@ -179,10 +202,10 @@ useEffect(() => {
       throw new Error("Preencha cidade, bairro, tipo, padrão e metragem.");
     }
 
-// =============================
-// LOCACAO
-// =============================
-if (dealType === "locacao") {
+  // =============================
+  // LOCACAO
+  // =============================
+  if (dealType === "locacao") {
 
   const area = Number(metragem);
   const q = quartos ? Number(quartos) : null;
@@ -207,7 +230,7 @@ if (dealType === "locacao") {
   p_vagas: vagas ? Number(vagas) : null,
   p_mobiliado: dealType === "locacao" ? mobiliado === "sim" : false,
   p_possui_edicula: edícula === "sim",
-});
+  });
   const learned = Array.isArray(learnedRows) ? learnedRows[0] : null;
 
   // ===== seed =====
@@ -323,93 +346,172 @@ if (dealType === "locacao") {
   p_possui_edicula: edícula === "sim",
 });
 
-  const fallback = Array.isArray(data) ? data[0] : data;
+const fallback = Array.isArray(data) ? data[0] : data;
 
-  let finalResult: RentalResult;
+let finalResult: RentalResult;
 
-  if (fallback && fallback.rent_estimada) {
-    finalResult = fallback;
-  } else {
-    const defaultM2 = 35;
-    const rentEst = defaultM2 * area;
+if (fallback && fallback.rent_estimada) {
+  finalResult = fallback;
+} else {
+  const defaultM2 = 35;
+  const rentEst = defaultM2 * area;
 
-    finalResult = {
-      ok: true,
-      rent_estimada: rentEst,
-      rent_min: rentEst * 0.9,
-      rent_max: rentEst * 1.1,
-      confidence: "baixa",
-      scope: "fallback",
-      comps_utilizadas: 0,
-      message: "Estimativa baseada em fallback de segurança.",
-    };
-  }
+  finalResult = {
+    ok: true,
+    rent_estimada: rentEst,
+    rent_min: rentEst * 0.9,
+    rent_max: rentEst * 1.1,
+    confidence: "baixa",
+    scope: "fallback",
+    comps_utilizadas: 0,
+    message: "Estimativa baseada em fallback de segurança.",
+  };
+}
 
-  setRentalResult(finalResult);
+try {
+  const saved = await saveRentalValuation({
+    user_id: userId,
+    status: "avaliado",
+    cidade: cidadeSelecionada?.name,
+    bairro: bairro,
+    tipo,
+    padrao,
+    area_m2: Number(metragem) || null,
+    quartos: q ?? null,
+    banheiros: banheiros ? Number(banheiros) : null,
+    vagas: vagas ? Number(vagas) : null,
+    edícula: edícula === "sim",
+    mobiliado: mobiliado === "sim",
+    rent_estimada: finalResult.rent_estimada ?? null,
+    rent_min: finalResult.rent_min ?? null,
+    rent_max: finalResult.rent_max ?? null,
+    confidence: finalResult.confidence ?? null,
+    explain_json: {
+      source: "fallback",
+      raw: data,
+      normalized: fallback ?? null,
+      final: finalResult,
+    },
+  });
+
+  setRentalResult({
+    ...finalResult,
+    evaluation_id: saved.id,
+    evaluation_created_at: saved.created_at,
+  });
 
   setShowResult(true);
   setStep(3);
   return;
-}
-
-setRentalResult(finalResult);
-
-try{
-const saved = await saveRentalValuation({
-  user_id: userId,
-  status: "avaliado",
-  cidade: cidadeSelecionada?.name,
-  bairro: bairro,
-  tipo,
-  padrao,
-  area_m2: Number(metragem) || null,
-  quartos: q ?? null,
-  banheiros: banheiros ? Number(banheiros) : null,
-  vagas: vagas ? Number(vagas) : null,
-  edícula: edícula === "sim",
-  mobiliado: mobiliado === "sim",
-  rent_estimada: finalResult.rent_estimada ?? null,
-  rent_min: finalResult.rent_min ?? null,
-  rent_max: finalResult.rent_max ?? null,
-  confidence: finalResult.confidence ?? null,
-  explain_json: {
-    source: "fallback",
-    raw: data,
-    normalized: fallback ?? null,
-    final: finalResult,
-  },
-
-});
-
-setRentalResult(prev =>
-  prev
-    ? {
-        ...prev,
-        evaluation_id: saved.id,
-        evaluation_created_at: saved.created_at,
-      }
-    : prev
-); 
-
-  setShowResult(true);
-  setStep(3);
 } catch (err) {
   console.error(err);
   toast.error("Erro ao salvar avaliação.");
   return;
 }
 
+}
     // =============================
-    // VENDA (placeholder)
+    // VENDA
     // =============================
-    setShowResult(true);
-    setStep(3);
-    
+    if (dealType === "venda") {
+      const area = Number(metragem);
+      const q = quartos ? Number(quartos) : null;
+      const b = banheiros ? Number(banheiros) : null;
+      const v = vagas ? Number(vagas) : null;
+      const estrategia = (estrategiaVenda || "normal") as "normal" | "rapido" | "maximizar";
+
+      const cidadeSelecionada = cidades.find((c) => c.id === cidade);
+
+      const { data: userRes, error: userErr } = await supabase.auth.getUser();
+      if (userErr) throw userErr;
+
+      const userId = userRes.user?.id;
+      if (!userId) throw new Error("Usuário não autenticado.");
+
+      const { data, error } = await supabase.rpc("calculate_sale_price", {
+        p_cidade: cidadeSelecionada?.name,
+        p_bairro: bairro,
+        p_tipo: tipo?.toLowerCase(),
+        p_padrao: padrao,
+        p_area: area,
+        p_quartos: q,
+        p_banheiros: b,
+        p_vagas: v,
+        p_estrategia: estrategia,
+      });
+
+      if (error) throw error;
+
+      const result = Array.isArray(data) ? data[0] : data;
+
+      if (!result?.ok) {
+        setSaleResult({
+          ok: false,
+          message: result?.message || "Poucos dados para estimativa de venda.",
+          confidence: result?.confidence,
+          scope: result?.scope,
+          comps_utilizadas: result?.comps_utilizadas,
+        });
+
+        setShowResult(true);
+        setStep(3);
+        return;
+      }
+
+      const finalSaleResult: SaleResult = {
+        ok: true,
+        preco_calculado: Number(result.preco_calculado),
+        faixa_min: Number(result.faixa_min),
+        faixa_max: Number(result.faixa_max),
+        confidence: result.confidence,
+        scope: result.scope,
+        comps_utilizadas: result.comps_utilizadas ?? 0,
+        valor_base_m2: result.valor_base_m2 ? Number(result.valor_base_m2) : undefined,
+        estrategia: result.estrategia,
+      };
+
+      setSaleResult(finalSaleResult);
+
+      const tempoEstimado =
+        estrategia === "rapido" ? 30 :
+        estrategia === "maximizar" ? 90 :
+        60;
+
+      const { error: insertError } = await supabase
+        .from("property_valuations")
+        .insert({
+          user_id: userId,
+          endereco: endereco || null,
+          bairro,
+          cidade: cidadeSelecionada?.name || cidadeNome,
+          tipo: tipo?.toLowerCase(),
+          metragem: area,
+          quartos: q,
+          banheiros: b,
+          vagas: v,
+          padrao,
+          estrategia,
+          valor_base_m2: finalSaleResult.valor_base_m2 ?? null,
+          preco_calculado: finalSaleResult.preco_calculado,
+          faixa_min: finalSaleResult.faixa_min,
+          faixa_max: finalSaleResult.faixa_max,
+          tempo_estimado: tempoEstimado,
+          status: "avaliado",
+        });
+
+      if (insertError) {
+        console.error("Erro ao salvar avaliação de venda:", insertError);
+        toast.error("Avaliação calculada, mas houve erro ao salvar.");
+      }
+
+      setShowResult(true);
+      setStep(3);
+      return;
+    }
   } catch (err: any) {
     console.error(err);
     setErrorMsg(err?.message ?? "Erro ao calcular. Tente novamente.");
   } finally {
-
     setLoading(false);
   }
 };
@@ -854,7 +956,8 @@ const ownerFriendlyMessage =
                 {/* Tipo de avaliação */}
                 <div className="space-y-2">
                   <Label>Tipo de Avaliação</Label>
-                  <Select value={dealType} onValueChange={(v) => setDealType(v as DealType)}>
+                  <Select value={dealType} onValueChange={(v) => {setDealType(v as DealType); setShowResult(false); setRentalResult(null); setSaleResult(null); }}
+                    >
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
@@ -942,9 +1045,9 @@ const ownerFriendlyMessage =
                     </SelectTrigger>
                     <SelectContent>
                       {/* Dica: mantenha estes valores iguais aos que você usa nos comps (ex.: 'Apartamento') */}
-                      <SelectItem value="Apartamento">Apartamento</SelectItem>
-                      <SelectItem value="Casa">Casa</SelectItem>
-                      <SelectItem value="Terreno">Terreno</SelectItem>
+                        <SelectItem value="apartamento">Apartamento</SelectItem>
+                        <SelectItem value="casa">Casa</SelectItem>
+                        <SelectItem value="terreno">Terreno</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -987,7 +1090,9 @@ const ownerFriendlyMessage =
                       <SelectItem value="0">0</SelectItem>
                       <SelectItem value="1">1</SelectItem>
                       <SelectItem value="2">2</SelectItem>
-                      <SelectItem value="3">3+</SelectItem>
+                      <SelectItem value="3">3</SelectItem>
+                      <SelectItem value="4">4</SelectItem>
+                      <SelectItem value="5">5+</SelectItem>
                       </SelectContent>
                       </Select>
                   </div>
@@ -1001,7 +1106,9 @@ const ownerFriendlyMessage =
                       <SelectItem value="0">0</SelectItem>
                       <SelectItem value="1">1</SelectItem>
                       <SelectItem value="2">2</SelectItem>
-                      <SelectItem value="3">3+</SelectItem>
+                      <SelectItem value="3">3</SelectItem>
+                      <SelectItem value="4">4</SelectItem>
+                      <SelectItem value="5">5+</SelectItem>
                       </SelectContent>
                       </Select>
                   </div>
@@ -1079,7 +1186,7 @@ const ownerFriendlyMessage =
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="rapido">Venda Rápida (preço agressivo)</SelectItem>
-                          <SelectItem value="equilibrio">Equilíbrio (preço justo)</SelectItem>
+                          <SelectItem value="normal">Equilíbrio (preço justo)</SelectItem>
                           <SelectItem value="maximizar">Maximizar Valor (preço premium)</SelectItem>
                         </SelectContent>
                       </Select>
@@ -1221,43 +1328,99 @@ const ownerFriendlyMessage =
                   </div>
                 )}
               </>
-            ) : (
+             ) : (
               <>
-                {/* Placeholder venda (você substitui depois pelo seu motor de venda) */}
-                <div className="text-center py-4">
-                  <p className="text-sm text-muted-foreground mb-1">Preço Sugerido</p>
-                  <p className="text-4xl font-display font-bold text-accent">R$ 520.000</p>
-                  <p className="text-sm text-muted-foreground mt-2">Faixa: R$ 480.000 – R$ 560.000</p>
-                </div>
-                <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-border">
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Valor Base/m²</p>
-                    <p className="text-sm font-semibold text-card-foreground">R$ 6.117</p>
+                {saleResult?.ok ? (
+                  <>
+                    <div className="text-center py-4">
+                      <p className="text-sm text-muted-foreground mb-1">Preço sugerido de venda</p>
+                      <p className="text-4xl font-display font-bold text-accent">
+                        {formatBRL(saleResult.preco_calculado)}
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-2">
+                        Faixa: {formatBRL(saleResult.faixa_min)} – {formatBRL(saleResult.faixa_max)}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-border">
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Valor Base/m²</p>
+                        <p className="text-sm font-semibold text-card-foreground">
+                          {saleResult.valor_base_m2
+                            ? formatBRL(saleResult.valor_base_m2)
+                            : "—"}
+                        </p>
+                      </div>
+
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Imóveis comparados</p>
+                        <p className="text-sm font-semibold text-card-foreground">
+                          {saleResult.comps_utilizadas ?? 0}
+                        </p>
+                      </div>
+
+                      <div className="text-center">
+                        <p className="text-xs text-muted-foreground">Nível de confiança</p>
+                        <p
+                          className={`text-sm font-semibold ${
+                            saleResult.confidence === "alta"
+                              ? "text-success"
+                              : saleResult.confidence === "media"
+                              ? "text-foreground"
+                              : "text-muted-foreground"
+                          }`}
+                        >
+                          {saleResult.confidence === "alta"
+                            ? "Referência muito confiável"
+                            : saleResult.confidence === "media"
+                            ? "Referência confiável"
+                            : "Referência inicial"}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+                      <p>
+                        Estratégia aplicada:{" "}
+                        <span className="font-medium text-foreground">
+                          {saleResult.estrategia === "rapido"
+                            ? "Venda rápida"
+                            : saleResult.estrategia === "maximizar"
+                            ? "Maximizar valor"
+                            : "Equilíbrio"}
+                        </span>
+                      </p>
+                      <p>
+                        Base da estimativa:{" "}
+                        <span className="font-medium text-foreground">
+                          {saleResult.scope === "bairro"
+                            ? "Pesquisa local"
+                            : saleResult.scope === "cidade"
+                            ? "Pesquisa regional"
+                            : saleResult.scope === "seed"
+                            ? "Pesquisa de mercado"
+                            : "Referência de mercado"}
+                        </span>
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-lg border border-border bg-muted/30 p-4">
+                    <p className="font-medium text-foreground">Sem dados suficientes</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {saleResult?.message ??
+                        "Ainda não há imóveis vendidos suficientes para este filtro."}
+                    </p>
                   </div>
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Tempo Estimado</p>
-                    <p className="text-sm font-semibold text-card-foreground">45 dias</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-muted-foreground">Base de Dados</p>
-                    <p className="text-sm font-semibold text-success">Alta</p>
-                  </div>
-                </div>
-                <div className="mt-6 flex gap-3">
-                  <Button className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90">Gerar Laudo PDF</Button>
-                  <Button variant="outline" className="flex-1">
-                    Salvar Avaliação
-                  </Button>
-                </div>
+                )}
               </>
             )}
+
           </motion.div>
         )}
       </div>
     </DashboardLayout>
   );
-
-
 };
 
 export default NovaAvaliacao;
