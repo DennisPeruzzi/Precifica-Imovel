@@ -15,11 +15,14 @@ export type LaudoData = {
   edícula: string; // "sim" | "não"
   mobiliado?: string | null; // "Mobiliado" | "Não mobiliado"
   padrao?: string | null;
+  endereco?: string | null;
   bairro: string;
   cidade: string;
   aluguelSugerido: string; // "R$ 2.800,00"
   faixaMin: string;
   faixaMax: string;
+  desconto_medio?: string | null; // "5%"
+  prazoEstimado: string; // "1-3 meses"
   fonte: string; // "Cidade" | "Bairro" | "Base de Mercado"
   baseDados: string; // "Dados amplos"...
   comps: number;
@@ -78,92 +81,109 @@ const styles = StyleSheet.create({
 const theme = { basic: { primary: "#2563EB", soft: "#DBEAFE", }, premium: { primary: "#C9A227", soft: "#FFF6CC", }
 };
 
-const CoverPageBasic = ({ d }: { d: LaudoData }) => {
+const normalizePadraoLabel = (value?: string | null) => {
+  if (!value) return "—";
 
+  const v = value.toLowerCase();
+
+  if (v === "medio") return "Médio";
+  if (v === "simples") return "Simples";
+  if (v === "alto") return "Alto";
+
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
+const capitalize = (value?: string | null) => {
+  if (!value) return "—";
+  return value.charAt(0).toUpperCase() + value.slice(1);
+};
+
+const formatCountLabel = (
+  value?: string | number | null,
+  singular?: string,
+  plural?: string
+) => {
+  if (value === null || value === undefined || value === "") return `0 ${plural}`;
+  const num = Number(value);
+  if (Number.isNaN(num)) return `${value} ${plural}`;
+  return `${num} ${num === 1 ? singular : plural}`;
+};
+
+const CoverPageBasic = ({ d }: { d: LaudoData }) => {
   const colors = theme[d.template];
 
   return (
-
     <Page size="A4" style={styles.page}>
-    <View style={styles.blueBar} />
-    <View style={styles.headerBasic}>
-      <View>
-        <Text style={styles.title}>Laudo Simplificado de Locação</Text>
-        <Text style={styles.muted}>Data da avaliação: {d.dataAvaliacao}</Text>
+      <View style={styles.blueBar} />
+      <View style={styles.headerBasic}>
+        <View>
+          <Text style={styles.title}>Laudo Simplificado de Locação</Text>
+          <Text style={styles.muted}>Data da avaliação: {d.dataAvaliacao}</Text>
+        </View>
+        <View style={{ textAlign: "right" }}>
+          <Text style={{ fontWeight: 700, fontSize: 12 }}>{d.corretorNome}</Text>
+          <Text style={styles.muted}>CRECI: {d.creci}</Text>
+        </View>
       </View>
-      <View style={{ textAlign: "right" }}>
-        <Text style={{ fontWeight: 700 , fontSize: 12 }}>{d.corretorNome}</Text>
-        <Text style={styles.muted}>CRECI: {d.creci}</Text>
-      </View>
-    </View>
 
-    <View style={styles.coverContainer}>
-
-       <Text style={[styles.coverLogo, { color: "black" }]}>
-         LAUDO DE AVALIAÇÃO IMOBILIÁRIA
+      <View style={styles.coverContainer}>
+        <Text style={[styles.coverLogo, { color: "black" }]}>
+          LAUDO DE AVALIAÇÃO IMOBILIÁRIA
         </Text>
 
         <Text style={[styles.coverTitle, { color: "black" }]}>
-        Relatório técnico de precificação baseado em dados de mercado
+          Relatório técnico de precificação para locação
         </Text>
 
-      <View style={[
-          styles.coverCard,
-          { backgroundColor: colors.soft }
-        ]}>
-        <Text style={[styles.coverLabel, { color: "black" }]}>
-           Imóvel
-        </Text>
-         <Text style={styles.coverValue}>
-          {d.tipo} - {d.bairro}, {d.cidade}
-        </Text>
+        <View
+          style={[
+            styles.coverCard,
+            { backgroundColor: colors.soft }
+          ]}
+        >
+          <Text style={[styles.coverLabel, { color: "black" }]}>
+            Imóvel
+          </Text>
+          <Text style={styles.coverValue}>
+            {capitalize(d.tipo)} - {d.bairro}, {d.cidade}
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.coverCard,
+            { backgroundColor: colors.soft }
+          ]}
+        >
+          <Text style={[styles.coverLabel, { color: "black" }]}>
+            Este laudo foi gerado com base em dados reais de mercado e análise estatística automatizada.
+          </Text>
+        </View>
       </View>
 
-       <View style={[
-        styles.coverCard,
-       { backgroundColor: colors.soft }
-       ]}>
-       <Text style={[styles.coverLabel, { color: "black" }]}>
-         Este laudo foi gerado com base em dados reais de mercado e análise estatística automatizada.
-        </Text>
-       </View>
-      
-
-       </View>
-
-        <View style={styles.footer} fixed>
-
-          <View style={styles.footerRow}>
-
-            <Image src="/logo-sem-nome.png" style={styles.logo} />
-
-            <View style={styles.footerText}>
-              <Text>
-                Documento gerado por inteligência de mercado • Precifica Imóvel
-              </Text>
-
-              <Text>
-              www.precificaimovel.com.br
-              </Text>
-
-              <Text
+      <View style={styles.footer} fixed>
+        <View style={styles.footerRow}>
+          <Image src="/logo-sem-nome.png" style={styles.logo} />
+          <View style={styles.footerText}>
+            <Text>Documento gerado por inteligência de mercado • Precifica Imóvel</Text>
+            <Text>www.precificaimovel.com.br</Text>
+            <Text
               render={({ pageNumber, totalPages }) =>
                 `Página ${pageNumber} de ${totalPages}`
-                }
-                />
-            </View>
+              }
+            />
           </View>
-       </View>
-     </Page>
+        </View>
+      </View>
+    </Page>
   );
 };
 
 
 const CoverPagePremium = ({ d }: { d: LaudoData }) => {
-
   const colors = theme[d.template];
 
-   return (
+  return (
     <Page size="A4" style={styles.page}>
       <View style={styles.goldBar} />
       <View style={styles.headerPremium}>
@@ -173,70 +193,61 @@ const CoverPagePremium = ({ d }: { d: LaudoData }) => {
           <Text style={styles.muted}>Data da avaliação: {d.dataAvaliacao}</Text>
         </View>
         <View style={{ textAlign: "right" }}>
-          <Text style={{ fontWeight: 800 , fontSize: 12 }}>{d.corretorNome}</Text>
+          <Text style={{ fontWeight: 800, fontSize: 12 }}>{d.corretorNome}</Text>
           <Text style={styles.muted}>CRECI: {d.creci}</Text>
         </View>
       </View>
 
       <View style={styles.coverContainer}>
-
         <Text style={[styles.coverLogo, { color: "black" }]}>
           LAUDO DE AVALIAÇÃO IMOBILIÁRIA
-          </Text>
+        </Text>
 
-          <Text style={[styles.coverTitle, { color: "black" }]}>
-          Relatório técnico de precificação baseado em dados de mercado
-          </Text>
+        <Text style={[styles.coverTitle, { color: "black" }]}>
+          Relatório técnico de precificação para locação
+        </Text>
 
-        <View style={[
+        <View
+          style={[
             styles.coverCard,
-              { backgroundColor: colors.soft }
-            ]}>
+            { backgroundColor: colors.soft }
+          ]}
+        >
           <Text style={[styles.coverLabel, { color: colors.primary }]}>
-             Imóvel
+            Imóvel
           </Text>
-            <Text style={styles.coverValue}>
-            { `${d.tipo}\n ${d.bairro},\n ${d.cidade}` }
-            </Text>
+          <Text style={styles.coverValue}>
+           {capitalize(d.tipo)} - {d.bairro}, {d.cidade}
+          </Text>
         </View>
 
-        <View style={[
-          styles.coverCard,
-        { backgroundColor: colors.soft }
-        ]}>
+        <View
+          style={[
+            styles.coverCard,
+            { backgroundColor: colors.soft }
+          ]}
+        >
           <Text style={[styles.coverLabel, { color: "black" }]}>
-          Este laudo foi gerado com base em dados reais de mercado e análise estatística automatizada.
+            Este laudo foi gerado com base em dados reais de mercado e análise estatística automatizada.
           </Text>
-        
-       </View>
+        </View>
+      </View>
 
-       </View>
-
-       <View style={styles.footer} fixed>
-
-          <View style={styles.footerRow}>
-
-            <Image src="/logo-sem-nome.png" style={styles.logo} />
-
-            <View style={styles.footerText}>
-              <Text>
-                Documento gerado por inteligência de mercado • Precifica Imóvel
-              </Text>
-
-              <Text>
-              www.precificaimovel.com.br
-              </Text>
-
-              <Text
+      <View style={styles.footer} fixed>
+        <View style={styles.footerRow}>
+          <Image src="/logo-sem-nome.png" style={styles.logo} />
+          <View style={styles.footerText}>
+            <Text>Documento gerado por inteligência de mercado • Precifica Imóvel</Text>
+            <Text>www.precificaimovel.com.br</Text>
+            <Text
               render={({ pageNumber, totalPages }) =>
                 `Página ${pageNumber} de ${totalPages}`
-                }
-                />
-            </View>
+              }
+            />
           </View>
-       </View>
-
-     </Page>
+        </View>
+      </View>
+    </Page>
   );
 };
 
@@ -250,60 +261,77 @@ const BasicLayout = ({ d }: { d: LaudoData }) => (
         <Text style={styles.muted}>Data da avaliação: {d.dataAvaliacao}</Text>
       </View>
       <View style={{ textAlign: "right" }}>
-        <Text style={{ fontWeight: 700 , fontSize: 12 }}>{d.corretorNome}</Text>
+        <Text style={{ fontWeight: 700, fontSize: 12 }}>{d.corretorNome}</Text>
         <Text style={styles.muted}>CRECI: {d.creci}</Text>
       </View>
     </View>
 
-      <View style={styles.card}>
+    <View style={styles.card}>
       <Text style={styles.h}>Imóvel</Text>
       <Text style={styles.muted}>
-        {d.tipo} • {d.metragem}m² • {d.quartos} quartos • {d.banheiros} banheiros • {d.vagas} vagas • {d.edícula} edícula
+        {capitalize(d.tipo)} • {d.metragem}m² •{" "}
+        {formatCountLabel(d.quartos, "quarto", "quartos")} •{" "}
+        {formatCountLabel(d.banheiros, "banheiro", "banheiros")} •{" "}
+        {formatCountLabel(d.vagas, "vaga", "vagas")} •{" "}
+        {d.edícula === "sim" ? "Com edícula" : "Sem edícula"} •{" "}
         {d.mobiliado ? ` • ${d.mobiliado}` : ""}
-        {d.padrao ? ` • Padrão: ${d.padrao}` : ""}
+        {d.padrao ? ` • Padrão: ${normalizePadraoLabel(d.padrao)}` : ""}
       </Text>
+
+       {!!d.endereco && (
+              <Text style={[styles.muted, { marginTop: 6 }]}>Endereço: {d.endereco}</Text>
+            )}
       <Text style={[styles.muted, { marginTop: 6 }]}>
         Localização: {d.bairro}, {d.cidade}
       </Text>
     </View>
 
-    <View style={styles.card}>
-      <Text style={styles.h}>Resultado</Text>
-      <Text style={{ fontSize: 16, fontWeight: 800, marginTop: 6 }}>{d.aluguelSugerido}</Text>
+    <View style={styles.kpi}>
+      <Text style={styles.kpiLabel}>Aluguel sugerido</Text>
+      <Text style={styles.kpiValue}>{d.aluguelSugerido}</Text>
       <Text style={styles.muted}>Faixa estimada: {d.faixaMin} – {d.faixaMax}</Text>
     </View>
 
     <View style={styles.card}>
-      <Text style={styles.muted}>
-        Fonte: {d.fonte} | Base: {d.baseDados} | Comps: {d.comps}
+      <Text style={styles.h}>Leitura comercial</Text>
+
+      {d.prazoEstimado && d.prazoEstimado.trim() !== "" && d.prazoEstimado !== "—" ? (
+        <Text style={styles.muted}>Prazo estimado: {d.prazoEstimado}</Text>
+      ) : null}
+
+      <Text style={[styles.muted, { marginTop: 6 }]}>
+        Fonte: {d.fonte}
       </Text>
-      {!!d.obs && <Text style={[styles.muted, { marginTop: 8 }]}>{d.obs}</Text>}
+
+      <Text style={[styles.muted, { marginTop: 4 }]}>
+        Base da estimativa: {d.baseDados}
+      </Text>
+
+      <Text style={[styles.muted, { marginTop: 4 }]}>
+        Imóveis comparados: {d.comps}
+      </Text>
+
+      {!!d.obs && (
+        <Text style={[styles.muted, { marginTop: 8 }]}>
+          {d.obs}
+        </Text>
+      )}
     </View>
-        
-        <View style={styles.footer} fixed>
 
-          <View style={styles.footerRow}>
-
-            <Image src="/logo-sem-nome.png" style={styles.logo} />
-
-            <View style={styles.footerText}>
-              <Text>
-                Documento gerado por inteligência de mercado • Precifica Imóvel
-              </Text>
-
-              <Text>
-              www.precificaimovel.com.br
-              </Text>
-
-              <Text
-              render={({ pageNumber, totalPages }) =>
-                `Página ${pageNumber} de ${totalPages}`
-                }
-                />
-            </View>
-          </View>
-       </View>
-   
+    <View style={styles.footer} fixed>
+      <View style={styles.footerRow}>
+        <Image src="/logo-sem-nome.png" style={styles.logo} />
+        <View style={styles.footerText}>
+          <Text>Documento gerado por inteligência de mercado • Precifica Imóvel</Text>
+          <Text>www.precificaimovel.com.br</Text>
+          <Text
+            render={({ pageNumber, totalPages }) =>
+              `Página ${pageNumber} de ${totalPages}`
+            }
+          />
+        </View>
+      </View>
+    </View>
   </Page>
 );
 
@@ -312,23 +340,34 @@ const PremiumLayout = ({ d }: { d: LaudoData }) => (
     <View style={styles.goldBar} />
     <View style={styles.headerPremium}>
       <View>
-        <Text style={styles.brand}>Precifica Imóvel</Text>
+        <Text style={styles.brand}>Precifica Imóvel - Sistema Inteligente de Precificação</Text>
         <Text style={{ fontSize: 16, fontWeight: 800 }}>Laudo Premium - Avaliação de Locação</Text>
         <Text style={styles.muted}>Data da avaliação: {d.dataAvaliacao}</Text>
       </View>
       <View style={{ textAlign: "right" }}>
-        <Text style={{ fontWeight: 800 , fontSize: 12 }}>{d.corretorNome}</Text>
+        <Text style={{ fontWeight: 800, fontSize: 12 }}>{d.corretorNome}</Text>
         <Text style={styles.muted}>CRECI: {d.creci}</Text>
       </View>
     </View>
 
-      <View style={styles.card}>
-      <Text style={styles.h}>Identificação do imóvel</Text>
-      <Text style={styles.muted}>{d.bairro}, {d.cidade}</Text>
-      <Text style={[styles.muted, { marginTop: 8 }]}>
-        {d.tipo} • {d.metragem}m² • {d.quartos} quartos • {d.banheiros} banheiros • {d.vagas} vagas • {d.edícula} edícula
+    <View style={styles.card}>
+      <Text style={styles.h}>Imóvel</Text>
+      <Text style={styles.muted}>
+        {capitalize(d.tipo)} • {d.metragem}m² •{" "}
+        {formatCountLabel(d.quartos, "quarto", "quartos")} •{" "}
+        {formatCountLabel(d.banheiros, "banheiro", "banheiros")} •{" "}
+        {formatCountLabel(d.vagas, "vaga", "vagas")} •{" "}
+        {d.edícula === "sim" ? "Com edícula" : "Sem edícula"} •{" "}
         {d.mobiliado ? ` • ${d.mobiliado}` : ""}
-        {d.padrao ? ` • Padrão: ${d.padrao}` : ""}
+        {d.padrao ? ` • Padrão: ${normalizePadraoLabel(d.padrao)}` : ""}
+      </Text>
+
+       {!!d.endereco && (
+              <Text style={[styles.muted, { marginTop: 6 }]}>Endereço: {d.endereco}</Text>
+            )}
+
+      <Text style={[styles.muted, { marginTop: 6 }]}>
+        Localização: {d.bairro}, {d.cidade}
       </Text>
     </View>
 
@@ -338,58 +377,49 @@ const PremiumLayout = ({ d }: { d: LaudoData }) => (
       <Text style={styles.muted}>Faixa estimada: {d.faixaMin} – {d.faixaMax}</Text>
     </View>
 
-    <View style={styles.card}>
-      <Text style={styles.h}>Base e metodologia</Text>
-      <View style={styles.gridRow}>
-        <View style={styles.col}>
-          <Text style={{ fontWeight: 700 }}>Fonte</Text>
-          <Text style={styles.muted}>{d.fonte}</Text>
-        </View>
-        <View style={styles.col}>
-          <Text style={{ fontWeight: 700 }}>Base de dados</Text>
-          <Text style={styles.muted}>{d.baseDados}</Text>
-        </View>
-        <View style={styles.col}>
-          <Text style={{ fontWeight: 700 }}>Comparáveis</Text>
-          <Text style={styles.muted}>{d.comps}</Text>
-        </View>
+    <View style={styles.gridRow}>
+      <View style={[styles.card, styles.col]}>
+        <Text style={styles.h}>Prazo estimado</Text>
+        <Text>{d.prazoEstimado && d.prazoEstimado.trim() !== "" ? d.prazoEstimado : "Em observação"}</Text>
       </View>
-      {!!d.obs && <Text style={[styles.muted, { marginTop: 10 }]}>{d.obs}</Text>}
+
+      <View style={[styles.card, styles.col]}>
+        <Text style={styles.h}>Imóveis comparados</Text>
+        <Text>{String(d.comps)}</Text>
+      </View>
     </View>
 
-        <View style={styles.footer} fixed>
+    <View style={styles.card}>
+      <Text style={styles.h}>Base da estimativa</Text>
+      <Text style={styles.muted}>Fonte: {d.fonte}</Text>
+      <Text style={[styles.muted, { marginTop: 6 }]}>Confiabilidade: {d.baseDados}</Text>
+      {!!d.obs && <Text style={[styles.muted, { marginTop: 8 }]}>{d.obs}</Text>}
+    </View>
 
-          <View style={styles.footerRow}>
-
-            <Image src="/logo-sem-nome.png" style={styles.logo} />
-
-            <View style={styles.footerText}>
-              <Text>
-                Documento gerado por inteligência de mercado • Precifica Imóvel
-              </Text>
-
-              <Text>
-              www.precificaimovel.com.br
-              </Text>
-
-              <Text
-              render={({ pageNumber, totalPages }) =>
-                `Página ${pageNumber} de ${totalPages}`
-                }
-                />
-            </View>
-          </View>
-       </View>
+    <View style={styles.footer} fixed>
+      <View style={styles.footerRow}>
+        <Image src="/logo-sem-nome.png" style={styles.logo} />
+        <View style={styles.footerText}>
+          <Text>Documento gerado por inteligência de mercado • Precifica Imóvel</Text>
+          <Text>www.precificaimovel.com.br</Text>
+          <Text
+            render={({ pageNumber, totalPages }) =>
+              `Página ${pageNumber} de ${totalPages}`
+            }
+          />
+        </View>
+      </View>
+    </View>
   </Page>
 );
 
 const MarketAnalysisPage = ({ d }: { d: LaudoData }) => {
   const market = {
-    preco_m2: d.market?.preco_m2 ?? "—",
-    liquidez: d.market?.liquidez ?? "—",
-    tempo_medio: d.market?.tempo_medio ?? "—",
-    desconto_medio: d.market?.desconto_medio ?? "—",
-  };
+    preco_m2: d.market?.preco_m2 ?? "Referência inicial",
+    liquidez: d.market?.liquidez ?? "Em observação",
+    tempo_medio: d.market?.tempo_medio ?? "Sem base suficiente",
+    desconto_medio: d.market?.desconto_medio ?? "Sem informação",
+};
 
   return (
     <Page size="A4" style={styles.page}>

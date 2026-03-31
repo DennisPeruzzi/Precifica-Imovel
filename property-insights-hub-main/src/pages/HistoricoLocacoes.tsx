@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LocacaoDetalheModal } from "@/components/LocacaoDetalheModal";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
+import { PlusCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, } from "@/components/ui/dialog";
 
 const ALL = "__ALL__";
@@ -59,6 +61,9 @@ const getScopeLabel = (row: RentalValuationRow) => {
 };
 
 export default function HistoricoLocacoes() {
+
+    const navigate = useNavigate();
+
   const [rows, setRows] = useState<RentalValuationRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -363,6 +368,15 @@ export default function HistoricoLocacoes() {
             <Button onClick={load} variant="outline" disabled={loading}>
               {loading ? "Atualizando..." : "Atualizar"}
             </Button>
+
+            <Button
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+              onClick={() => navigate("/dashboard/nova-avaliacao")}
+            >
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Nova Avaliação
+            </Button>
+
           </div>
         </div>
 

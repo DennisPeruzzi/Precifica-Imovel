@@ -13,6 +13,8 @@ export type LaudoVendaData = {
   quartos: string;
   banheiros: string;
   vagas: string;
+  edícula?: string | null;
+  mobiliado?: string | null;
   padrao?: string | null;
   bairro: string;
   cidade: string;
@@ -99,7 +101,7 @@ const CoverPageBasic = ({ d }: { d: LaudoVendaData }) => {
       <View style={styles.blueBar} />
       <View style={styles.headerBasic}>
         <View>
-          <Text style={styles.title}>Laudo Simplificado de Venda</Text>
+          <Text style={styles.title}>Laudo Basic - Avaliação de Venda</Text>
           <Text style={styles.muted}>Data da avaliação: {d.dataAvaliacao}</Text>
         </View>
         <View style={{ textAlign: "right" }}>
@@ -177,7 +179,7 @@ const CoverPagePremium = ({ d }: { d: LaudoVendaData }) => {
         <View style={[styles.coverCard, { backgroundColor: colors.soft }]}>
           <Text style={[styles.coverLabel, { color: colors.primary }]}>Imóvel</Text>
           <Text style={styles.coverValue}>
-            {`${d.tipo}\n${d.bairro},\n${d.cidade}`}
+            {d.tipo} - {d.bairro}, {d.cidade}
           </Text>
         </View>
 
@@ -209,7 +211,7 @@ const BasicLayout = ({ d }: { d: LaudoVendaData }) => (
     <View style={styles.blueBar} />
     <View style={styles.headerBasic}>
       <View>
-        <Text style={styles.title}>Laudo Simplificado de Venda</Text>
+        <Text style={styles.title}>Laudo Basic - Avaliação de Venda</Text>
         <Text style={styles.muted}>Data da avaliação: {d.dataAvaliacao}</Text>
       </View>
       <View style={{ textAlign: "right" }}>
@@ -222,6 +224,8 @@ const BasicLayout = ({ d }: { d: LaudoVendaData }) => (
       <Text style={styles.h}>Imóvel</Text>
       <Text style={styles.muted}>
         {d.tipo} • {d.metragem}m² • {d.quartos} quartos • {d.banheiros} banheiros • {d.vagas} vagas
+        {d.edícula === "sim" ? "Com edícula" : "Sem edícula"}
+        {d.mobiliado ? ` • ${d.mobiliado}` : ""}
         {d.padrao ? ` • Padrão: ${d.padrao}` : ""}
       </Text>
       {!!d.endereco && (

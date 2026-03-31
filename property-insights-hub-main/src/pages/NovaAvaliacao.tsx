@@ -107,6 +107,9 @@ const NovaAvaliacao = () => {
   const [saleEvaluationId, setSaleEvaluationId] = useState<string | null>(null);
   const [saleEvaluationCreatedAt, setSaleEvaluationCreatedAt] = useState<string | null>(null);
 
+  const [rentalPdfGenerated, setRentalPdfGenerated] = useState(false);
+  const [salePdfGenerated, setSalePdfGenerated] = useState(false);
+
   const [profile, setProfile] = useState<{ nome: string | null; creci: string | null; plano: string | null; apelido: string | null } | null>(null);
 
   const cidadeNome = cidades.find((c) => c.id === cidade)?.name || cidade
@@ -200,6 +203,8 @@ const NovaAvaliacao = () => {
   e.preventDefault();
   setErrorMsg(null);
   setLoading(true);
+  setRentalPdfGenerated(false);
+  setSalePdfGenerated(false);
 
   try {
     if (!cidade || !bairro || !tipo || !padrao || !metragem) {
@@ -701,6 +706,13 @@ const handleCopyResumo = async () => {
     ? "Referência confiável"
     : "Referência inicial";
 
+    const obsLabel =
+  rentalResult.scope === "bairro"
+    ? "Estimativa baseada em imóveis comparáveis da região."
+    : rentalResult.scope === "cidade"
+    ? "Estimativa baseada em referências de mercado da cidade."
+    : "Estimativa baseada em dados reais de mercado e imóveis comparáveis da região.";
+
     // 3️⃣ dados do PDF
 
 let marketData = null;
@@ -727,36 +739,44 @@ if (template === "premium") {
     console.error("Erro ao buscar v_market_liquidez:", marketError);
   }
 
-  marketData = {
-    preco_m2:
-      data?.preco_m2_medio !== null && data?.preco_m2_medio !== undefined
-        ? `${Number(data.preco_m2_medio).toLocaleString("pt-BR", {
-        style: "currency",
-        currency: "BRL",
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+ marketData = {
+  preco_m2:
+    data?.preco_m2_medio !== null && data?.preco_m2_medio !== undefined
+      ? `${Number(data.preco_m2_medio).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
         })}/m²`
-        : "—",
 
-    liquidez:
-      data?.liquidez !== null && data?.liquidez !== undefined
-        ? String(data.liquidez)
-        : "—",
+      : rentalResult?.rent_estimada && Number(metragem) > 0
+      ? `${(rentalResult.rent_estimada / Number(metragem)).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })}/m²`
+      : "Referência inicial",
 
-    tempo_medio:
-  data?.dias_medio_locacao !== null && data?.dias_medio_locacao !== undefined
-        ? `${Number(data.dias_medio_locacao).toLocaleString("pt-BR", {
-        maximumFractionDigits: 0,
+  liquidez:
+    data?.liquidez !== null && data?.liquidez !== undefined
+      ? String(data.liquidez)
+      : "Em observação",
+
+  tempo_medio:
+    data?.dias_medio_locacao !== null && data?.dias_medio_locacao !== undefined
+      ? `${Number(data.dias_medio_locacao).toLocaleString("pt-BR", {
+          maximumFractionDigits: 0,
         })} dias`
-        : "—",
+      : "Sem base suficiente",
 
-    desconto_medio:
-  data?.desconto_medio !== null && data?.desconto_medio !== undefined
-    ? `${(Number(data.desconto_medio) * 100).toLocaleString("pt-BR", {
-        minimumFractionDigits: 1,
-        maximumFractionDigits: 1,
-      })}%`
-    : "—",
+  desconto_medio:
+    data?.desconto_medio !== null && data?.desconto_medio !== undefined
+      ? `${(Number(data.desconto_medio) * 100).toLocaleString("pt-BR", {
+          minimumFractionDigits: 1,
+          maximumFractionDigits: 1,
+        })}%`
+      : "Sem base suficiente",
   };
 }
     const d = {
@@ -773,6 +793,7 @@ if (template === "premium") {
       edícula: edícula === "sim" ? "Sim" : "Não",
       mobiliado: dealType === "locacao" ? (mobiliado === "sim" ? "Mobiliado" : "Não mobiliado") : null,
       padrao: padrao || null,
+      endereco: endereco || null,
       bairro: bairro || "-",
       cidade: cidadeNome || "-",
       aluguelSugerido: formatBRL(rentalResult.rent_estimada),
@@ -781,7 +802,7 @@ if (template === "premium") {
       fonte: scopeLabel,
       baseDados: baseDadosLabel,
       comps: rentalResult.comps_utilizadas ?? 0,
-      obs: ownerFriendlyMessage,
+      obs: obsLabel,
     };
 
     // 4️⃣ gerar PDF como Blob
@@ -828,18 +849,21 @@ if (dbError) {
 }
     
     // 9️⃣ download imediato
-    const url = URL.createObjectURL(blob);
+    const { data: publicData } = supabase.storage.from("reports").getPublicUrl(storagePath);
 
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `laudo-${bairro}-${cidadeNome}.pdf`;
-    link.click();
+    if (!publicData?.publicUrl) {
+    throw new Error("Não foi possível obter o link do PDF.");
+    }
 
-    toast.success("Laudo gerado com sucesso!", {
+    window.open(publicData.publicUrl, "_blank");
+
+      setRentalPdfGenerated(true);
+
+      toast.success("Laudo gerado com sucesso!", {
       description:
-        template === "basic"
-          ? `Plano Basic: restam ${authRow.remaining} laudos neste mês.`
-          : "PDF premium pronto para download.",
+      template === "basic"
+      ? `Plano Basic: restam ${authRow.remaining} laudos neste mês.`
+      : "PDF premium pronto para visualização.",
     });
 
   } catch (err) {
@@ -1005,6 +1029,8 @@ if (dbError) {
     }
 
     window.open(publicData.publicUrl, "_blank");
+
+    setSalePdfGenerated(true);
 
     toast.success("Laudo de venda gerado com sucesso!", {
       description:
@@ -1477,8 +1503,9 @@ const ownerFriendlyMessage =
   </div>
 
                   <div className="mt-6 flex gap-3">
-                     <Button type="button" className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleGerarPdf}>
-                        Gerar Laudo PDF
+                     <Button type="button" className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleGerarPdf} disabled={rentalPdfGenerated} 
+                      >
+                      {rentalPdfGenerated ? "Laudo já emitido" : "Gerar Laudo PDF"}
                       </Button>
 
                       <Button type="button" variant="outline" className="flex-1" onClick={handleCopyResumo}
@@ -1585,13 +1612,9 @@ const ownerFriendlyMessage =
                     </div>
 
                     <div className="mt-6 flex gap-3">
-                      <Button
-                      type="button"
-                      className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90"
-                      onClick={handleGerarPdfVenda}
-                      disabled={!saleResult?.ok}
+                      <Button type="button" className="flex-1 bg-accent text-accent-foreground hover:bg-accent/90" onClick={handleGerarPdfVenda} disabled={!saleResult?.ok || salePdfGenerated}
                       >
-                      Gerar Laudo PDF
+                      {salePdfGenerated ? "Laudo já emitido" : "Gerar Laudo PDF"}
                       </Button>
 
                       <Button

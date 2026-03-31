@@ -3,12 +3,12 @@ import { TrendingUp, LayoutDashboard, List, BarChart3, Building, LogOut, Calcula
 import { useRole } from "@/hooks/useRole";
 
 const navItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Home" },
   { to: "/dashboard/nova-avaliacao", icon: Calculator, label: "Nova Avaliação" },
   { to: "/dashboard/avaliacoes", icon: List, label: "Avaliações Venda" },
   { to: "/dashboard/mercado", icon: BarChart3, label: "Dados de Mercado" },
-  { to: "/dashboard/vendidos", icon: Building, label: "Imóveis Vendidos" },
-  { to: "/dashboard/locacoes", icon: House, label: "Imóveis Locados" },
+  { to: "/dashboard/vendidos", icon: Building, label: "Histórico Vendas" },
+  { to: "/dashboard/locacoes", icon: House, label: "Histórico Locações" },
   { to: "/dashboard/base-mercado/locacao", icon: BadgeDollarSign, label: "Base de Mercado (Locação)" },
   { to: "/dashboard/base-mercado/venda", icon: BadgeDollarSign, label: "Base de Mercado (Venda)" },
   { to: "/dashboard/relatorios", icon: ListCheck, label: "Relatórios Locação" },
